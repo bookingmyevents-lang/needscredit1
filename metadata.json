@@ -1,0 +1,7 @@
+{
+  "name": "RentEase",
+  "description": "A modern platform for renters and property owners to manage rentals, applications, and payments seamlessly. Renters can browse properties, apply online, and pay rent, while owners can manage listings and applications.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RentEase - Your Rental Partner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="/index.css" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#0D47A1', // A deep, trustworthy blue
+              secondary: '#1976D2', // A lighter, vibrant blue for actions
+              accent: '#FFC107', // A warm yellow for highlights
+              neutral: {
+                50: '#F8FAFC',
+                100: '#F1F5F9',
+                200: '#E2E8F0',
+                300: '#CBD5E1',
+                700: '#334155',
+                900: '#0F172A',
+              },
+            },
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.2.0/",
+    "react/": "https://aistudiocdn.com/react@^18.2.0/",
+    "react": "https://aistudiocdn.com/react@^18.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
+    "leaflet": "https://aistudiocdn.com/leaflet@^1.9.4",
+    "react-leaflet": "https://aistudiocdn.com/react-leaflet@^4.2.1",
+    "leaflet/": "https://aistudiocdn.com/leaflet@^1.9.4/",
+    "typescript": "https://aistudiocdn.com/typescript@^5.9.3"
+  }
+}
+</script>
+</head>
+  <body class="bg-neutral-50">
+    <div id="root"></div>
+  </body>
+</html>

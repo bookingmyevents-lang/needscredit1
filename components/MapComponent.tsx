@@ -1,0 +1,172 @@
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import * as L from 'leaflet';
+import { SearchIcon, CrosshairIcon, LayersIcon } from './Icons';
+
+// Fix for default marker icon not appearing in some bundlers
+const icon = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+const iconShadow = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+// Use a function to create the icon on demand, avoiding module-level execution issues
+const createDefaultIcon = () => {
+    return L.icon({
+        iconUrl: icon,
+        shadowUrl: iconShadow,
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        tooltipAnchor: [16, -28],
+        shadowSize: [41, 41]
+    });
+};
+
+interface MapControllerProps {
+    onBoundsChange?: (bounds: L.LatLngBounds) => void;
+    onClick?: (coords: L.LatLng) => void;
+}
+
+const MapController: React.FC<MapControllerProps> = ({ onBoundsChange, onClick }) => {
+    const map = useMap();
+    const [isSearchButtonVisible, setIsSearchButtonVisible] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
+
+    useMapEvents({
+        dragend: () => onBoundsChange && setIsSearchButtonVisible(true),
+        zoomend: () => onBoundsChange && setIsSearchButtonVisible(true),
+        click: (e) => onClick && onClick(e.latlng),
+    });
+
+    const handleSearchClick = () => {
+        if (onBoundsChange) {
+            onBoundsChange(map.getBounds());
+            setIsSearchButtonVisible(false);
+        }
+    };
+    
+    const handleCenterOnLocation = () => {
+        setIsLocating(true);
+        map.locate().on('locationfound', (e) => {
+            map.flyTo(e.latlng, map.getZoom());
+            setIsLocating(false);
+        }).on('locationerror', (e) => {
+            alert('Could not find your location. Please check browser permissions.');
+            setIsLocating(false);
+        });
+    };
+
+    return (
+        <>
+            {onBoundsChange && isSearchButtonVisible && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] drop-shadow-lg">
+                    <button
+                        onClick={handleSearchClick}
+                        className="bg-primary hover:bg-secondary text-white font-bold py-2 px-5 rounded-full flex items-center gap-2 transition-colors"
+                    >
+                        <SearchIcon className="w-5 h-5" />
+                        Search this area
+                    </button>
+                </div>
+            )}
+            <div className="absolute bottom-4 right-4 z-[1000]">
+                <button
+                    onClick={handleCenterOnLocation}
+                    disabled={isLocating}
+                    title="Center on my location"
+                    className="bg-white hover:bg-gray-100 text-neutral-800 font-bold p-3 rounded-full shadow-lg flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-wait"
+                >
+                    {isLocating ? (
+                         <svg className="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : (
+                        <CrosshairIcon className="w-5 h-5" />
+                    )}
+                </button>
+            </div>
+        </>
+    );
+};
+
+
+interface MapMarker {
+    id: string;
+    position: [number, number];
+    content: React.ReactNode;
+    icon?: L.Icon | L.DivIcon;
+    draggable?: boolean;
+    onDragEnd?: (coords: L.LatLng) => void;
+}
+
+interface MapComponentProps {
+    markers: MapMarker[];
+    center: [number, number];
+    zoom: number;
+    className?: string;
+    onBoundsChange?: (bounds: L.LatLngBounds) => void;
+    onClick?: (coords: L.LatLng) => void;
+    onMarkerClick?: (id: string) => void;
+}
+
+const MapComponent: React.FC<MapComponentProps> = ({ markers, center, zoom, className, onBoundsChange, onClick, onMarkerClick }) => {
+    const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
+
+    const tileLayers = {
+        street: {
+            url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        },
+        satellite: {
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        }
+    };
+    
+    return (
+        <div className={`relative ${className}`}>
+            <MapContainer key={`${center.join('-')}-${markers.length}-${mapType}`} center={center} zoom={zoom} scrollWheelZoom={true} className="h-full w-full">
+                <TileLayer
+                    key={mapType}
+                    attribution={tileLayers[mapType].attribution}
+                    url={tileLayers[mapType].url}
+                />
+                {markers.map((marker) => (
+                    <Marker 
+                        key={marker.id}
+                        position={marker.position}
+                        icon={marker.icon || createDefaultIcon()}
+                        draggable={marker.draggable}
+                        eventHandlers={{
+                            click: () => {
+                                if (onMarkerClick) {
+                                    onMarkerClick(marker.id);
+                                }
+                            },
+                            dragend: (event) => {
+                                if (marker.onDragEnd) {
+                                    marker.onDragEnd(event.target.getLatLng());
+                                }
+                            },
+                        }}
+                    >
+                        <Popup>
+                            {marker.content}
+                        </Popup>
+                    </Marker>
+                ))}
+                <MapController onBoundsChange={onBoundsChange} onClick={onClick} />
+            </MapContainer>
+             <div className="absolute bottom-4 left-4 z-[1000]">
+                <button
+                    onClick={() => setMapType(prev => prev === 'street' ? 'satellite' : 'street')}
+                    title="Change map style"
+                    className="bg-white hover:bg-gray-100 text-neutral-800 font-bold p-3 rounded-full shadow-lg flex items-center justify-center transition-colors"
+                >
+                    <LayersIcon className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+export default MapComponent;
