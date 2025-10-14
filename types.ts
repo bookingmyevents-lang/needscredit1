@@ -258,6 +258,8 @@ export enum ActivityType {
     SIGNED_AGREEMENT = 'SIGNED_AGREEMENT',
     RAISED_DISPUTE = 'RAISED_DISPUTE',
     AGREEMENT_ACTION_REQUIRED = 'AGREEMENT_ACTION_REQUIRED',
+    CREATED_TASK = 'CREATED_TASK',
+    COMPLETED_TASK = 'COMPLETED_TASK',
 }
 
 export interface ActivityLog {
@@ -280,6 +282,8 @@ export enum NotificationType {
     OFFLINE_PAYMENT_CONFIRMED = 'OFFLINE_PAYMENT_CONFIRMED',
     DEPOSIT_PAYMENT_DUE = 'DEPOSIT_PAYMENT_DUE',
     KEYS_HANDOVER_READY = 'KEYS_HANDOVER_READY',
+    NEW_TASK_ASSIGNED = 'NEW_TASK_ASSIGNED',
+    TASK_STATUS_UPDATE = 'TASK_STATUS_UPDATE',
 }
 
 export interface Notification {
@@ -290,6 +294,24 @@ export interface Notification {
     timestamp: string;
     isRead: boolean;
     relatedId: string; // propertyId, viewingId, etc.
+}
+
+export enum TaskStatus {
+    TODO = 'To Do',
+    IN_PROGRESS = 'In Progress',
+    DONE = 'Done',
+}
+
+export interface Task {
+    id: string;
+    title: string;
+    description: string;
+    propertyId: string;
+    assignedToId: string; // userId of renter or owner
+    createdBy: string; // userId
+    status: TaskStatus;
+    dueDate: string;
+    createdAt: string;
 }
 
 export interface AiFilters {

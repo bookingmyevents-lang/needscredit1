@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment } from '../types';
-import { BillType, ApplicationStatus, PaymentType, ViewingStatus } from '../types';
+import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, Task } from '../types';
+import { BillType, ApplicationStatus, PaymentType, ViewingStatus, TaskStatus } from '../types';
 import * as Icons from './Icons';
 import VerificationForm from './VerificationForm';
 
@@ -13,6 +13,8 @@ interface TenantDashboardProps {
   properties: Property[];
   bills: Bill[];
   verification: Verification;
+  tasks: Task[];
+  users: User[];
   onSubmitVerification: (formData: Record<string, any>) => void;
   onPayBill: (billId: string) => void;
   onRaiseDispute: (relatedId: string, type: 'Viewing' | 'Payment' | 'Property') => void;
@@ -21,6 +23,8 @@ interface TenantDashboardProps {
   onInitiatePaymentFlow: (application: Application, property: Property) => void;
   onConfirmRent: (viewingId: string) => void;
   onCancelViewing: (viewingId: string) => void;
+  onAddTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'status' | 'createdBy'>) => void;
+  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
 }
 
 const KycStatusBadge: React.FC<{ status: 'Verified' | 'Pending' | 'Rejected' | 'Not Verified', large?: boolean }> = ({ status, large = false }) => {
@@ -53,7 +57,7 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: React.Re
     </div>
 );
 
-const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, viewings, applications, payments, properties, bills, verification, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing }) => {
+const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, viewings, applications, payments, properties, bills, verification, tasks, users, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onAddTask, onUpdateTaskStatus }) => {
     const [activeTab, setActiveTab] = useState('agreements');
     const [filterType, setFilterType] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
@@ -191,6 +195,7 @@ const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, vie
             <div className="border-b mb-6 flex flex-wrap">
                 <TabButton id="agreements" label="My Agreements" count={pendingAgreementSignatures} />
                 <TabButton id="bills" label="Bills & Payments" count={paymentItems.length} />
+                <TabButton id="tasks" label="Tasks" count={tasks.filter(t => t.status !== TaskStatus.DONE).length} />
                 <TabButton id="history" label="Payment History" />
                 <TabButton id="viewings" label="My Viewings" />
                 <TabButton id="verification" label="Verification" />
@@ -295,6 +300,10 @@ const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, vie
                 </div>
             )}
             
+            {activeTab === 'tasks' && (
+                <div>Render Tasks Here</div>
+            )}
+
             {activeTab === 'bills' && (
                 <div className="space-y-4">
                     {paymentItems.length > 0 ? paymentItems.map((item) => {

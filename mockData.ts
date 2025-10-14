@@ -1,4 +1,4 @@
-import { Property, FurnishingStatus, Facing, Review, User, UserRole, Viewing, ViewingStatus, Agreement, Verification, VerificationStatus, Bill, BillType, Dispute, DisputeStatus, Payment, PaymentType, Application, ApplicationStatus, ActivityLog, ActivityType, Notification, NotificationType } from './types';
+import { Property, FurnishingStatus, Facing, Review, User, UserRole, Viewing, ViewingStatus, Agreement, Verification, VerificationStatus, Bill, BillType, Dispute, DisputeStatus, Payment, PaymentType, Application, ApplicationStatus, ActivityLog, ActivityType, Notification, NotificationType, Task, TaskStatus } from './types';
 
 export const mockReviews: Review[] = [
     { id: 'review1', author: 'Kailash Chandra Tripathy', role: 'Owner', time: '1 year ago', rating: 5, goodThings: 'Within 50m from the Nandan Kanan Road. Close to proposed under construction metro rail. Close to proximity to Nandan Kanan.', needsImprovement: 'There is nothing I found from dislike prospective.' },
@@ -374,7 +374,14 @@ export const mockActivityLogs: ActivityLog[] = [
         type: ActivityType.APPROVED_APPLICATION,
         message: 'Approved application for Ravi Kumar for Spacious 2BHK in Patia.',
         timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    }
+    },
+    {
+        id: 'log4',
+        userId: 'user-renter',
+        type: ActivityType.CREATED_TASK,
+        message: 'Created a new task: "Fix leaking kitchen tap" for Sea View Apartment in Puri.',
+        timestamp: new Date().toISOString(),
+    },
 ];
 
 export const mockNotifications: Notification[] = [
@@ -438,3 +445,50 @@ Landlord Signature
 _________________________
 Tenant Signature
 `;
+
+export const mockTasks: Task[] = [
+    {
+        id: 'task1',
+        title: 'Fix leaking kitchen tap',
+        description: 'The kitchen tap in the main sink has been dripping for a few days. Needs a washer replacement.',
+        propertyId: 'prop3', // Sea View Apartment
+        assignedToId: 'user-owner', // Assigned to owner
+        createdBy: 'user-renter', // Created by renter
+        status: TaskStatus.TODO,
+        dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+        createdAt: new Date().toISOString(),
+    },
+    {
+        id: 'task2',
+        title: 'Repaint the balcony railing',
+        description: 'The paint on the balcony railing is chipping due to sea spray. Should be repainted before the monsoon.',
+        propertyId: 'prop3',
+        assignedToId: 'user-owner',
+        createdBy: 'user-owner',
+        status: TaskStatus.IN_PROGRESS,
+        dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+        id: 'task3',
+        title: 'Schedule annual pest control',
+        description: '',
+        propertyId: 'prop6', // Fully Furnished 2BHK
+        assignedToId: 'user-owner',
+        createdBy: 'user-owner',
+        status: TaskStatus.DONE,
+        dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+        id: 'task4',
+        title: 'Pay electricity bill',
+        description: 'Personal reminder to pay the electricity bill for prop3 before the due date.',
+        propertyId: 'prop3',
+        assignedToId: 'user-renter',
+        createdBy: 'user-renter',
+        status: TaskStatus.TODO,
+        dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // overdue
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+];

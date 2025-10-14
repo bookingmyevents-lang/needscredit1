@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters } from './types';
-import { UserRole, ApplicationStatus, FurnishingStatus, Facing, ViewingStatus, VerificationStatus, BillType, DisputeStatus, ActivityType, NotificationType, PaymentType } from './types';
-import { mockProperties, mockUsers, mockViewings, mockAgreements, mockVerifications, mockBills, mockDisputes, mockPayments, mockApplications, mockActivityLogs, mockNotifications } from './mockData';
+import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, Task } from './types';
+import { UserRole, ApplicationStatus, FurnishingStatus, Facing, ViewingStatus, VerificationStatus, BillType, DisputeStatus, ActivityType, NotificationType, PaymentType, TaskStatus } from './types';
+import { mockProperties, mockUsers, mockViewings, mockAgreements, mockVerifications, mockBills, mockDisputes, mockPayments, mockApplications, mockActivityLogs, mockNotifications, mockTasks } from './mockData';
 import Header from './components/Header';
 import PropertyList from './components/PropertyList';
 import PropertyDetails from './components/PropertyDetails';
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>(mockPayments);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(mockActivityLogs);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
 
   // View state
   const [currentView, setCurrentView] = useState('home'); // home, login, browsing, propertyDetails, booking, dashboard, etc.
@@ -1144,6 +1145,48 @@ const App: React.FC = () => {
 
     alert('Key handover confirmed. The rental process is complete.');
   };
+
+  const handleAddTask = (taskData: Omit<Task, 'id' | 'createdAt' | 'status' | 'createdBy'>) => {
+    if (!currentUser) return;
+    const newTask: Task = {
+        ...taskData,
+        id: `task-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        status: TaskStatus.TODO,
+        createdBy: currentUser.id,
+    };
+    setTasks(prev => [newTask, ...prev]);
+    addActivityLog(ActivityType.CREATED_TASK, `Created a new task: "${newTask.title}".`);
+    
+    if (newTask.assignedToId !== currentUser.id) {
+        addNotification(
+            newTask.assignedToId,
+            NotificationType.NEW_TASK_ASSIGNED,
+            `${currentUser.name} assigned you a new task: "${newTask.title}".`,
+            newTask.id
+        );
+    }
+  };
+
+  const handleUpdateTaskStatus = (taskId: string, status: TaskStatus) => {
+    if(!currentUser) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
+    
+    if (status === TaskStatus.DONE) {
+        addActivityLog(ActivityType.COMPLETED_TASK, `Completed task: "${task.title}".`);
+        if (task.createdBy !== currentUser.id) {
+             addNotification(
+                task.createdBy,
+                NotificationType.TASK_STATUS_UPDATE,
+                `${currentUser.name} completed the task: "${task.title}".`,
+                task.id
+            );
+        }
+    }
+  };
   
   const PaymentChoiceModal: React.FC<{
       onSelect: (method: 'online' | 'offline') => void;
@@ -1409,6 +1452,7 @@ const App: React.FC = () => {
             const renterViewings = viewings.filter(v => v.tenantId === currentUser.id);
             const renterBills = bills.filter(b => b.tenantId === currentUser.id);
             const renterVerification = verifications.find(v => v.tenantId === currentUser.id);
+            const renterTasks = tasks.filter(t => t.assignedToId === currentUser.id || t.createdBy === currentUser.id);
             
             const safeAgreements = renterAgreements.map(a => {
                 const property = properties.find(p => p.id === a.propertyId);
@@ -1442,6 +1486,8 @@ const App: React.FC = () => {
                         properties={properties}
                         bills={renterBills}
                         verification={safeVerification}
+                        tasks={renterTasks}
+                        users={users}
                         onSubmitVerification={handleSubmitVerification}
                         onPayBill={handlePayBill}
                         onRaiseDispute={(relatedId, type) => handleRaiseDispute(relatedId, type as any)}
@@ -1450,6 +1496,8 @@ const App: React.FC = () => {
                         onInitiatePaymentFlow={handleInitiatePaymentFlow}
                         onConfirmRent={handleConfirmRent}
                         onCancelViewing={handleCancelViewing}
+                        onAddTask={handleAddTask}
+                        onUpdateTaskStatus={handleUpdateTaskStatus}
                    />;
             break;
           case UserRole.OWNER:
@@ -1464,6 +1512,7 @@ const App: React.FC = () => {
               const ownerApplications = applications.filter(a => ownerPropertyIds.includes(a.propertyId));
               const ownerAgreements = agreements.filter(a => ownerPropertyIds.includes(a.propertyId));
               const ownerPayments = payments.filter(p => ownerPropertyIds.includes(p.propertyId) || p.userId === currentUser.id);
+              const ownerTasks = tasks.filter(t => ownerPropertyIds.includes(t.propertyId));
 
               const safePaymentHistory = ownerPayments.map(payment => {
                 const tenant = users.find(u => u.id === payment.userId);
@@ -1500,6 +1549,8 @@ const App: React.FC = () => {
                       applications={safeOwnerApplications}
                       agreements={safeOwnerAgreements}
                       paymentHistory={safePaymentHistory}
+                      tasks={ownerTasks}
+                      users={users}
                       onUpdateViewingStatus={handleUpdateViewingStatus}
                       onUpdateApplicationStatus={handleUpdateApplicationStatus}
                       onEditProperty={handleSelectPropertyForEdit}
@@ -1511,6 +1562,8 @@ const App: React.FC = () => {
                       onMarkAsRented={handleMarkPropertyAsRented}
                       onInitiateFinalizeAgreement={handleInitiateFinalizeAgreement}
                       onConfirmKeyHandover={handleConfirmKeyHandover}
+                      onAddTask={handleAddTask}
+                      onUpdateTaskStatus={handleUpdateTaskStatus}
                     />;
             }
             break;

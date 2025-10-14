@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import type { Property, Viewing, User, Application, Agreement, Payment } from '../types';
-import { ViewingStatus, ApplicationStatus, PaymentType } from '../types';
-import { MailIcon, DocumentTextIcon, CheckCircleIcon, XCircleIcon, PencilIcon, PlusCircleIcon, CalendarDaysIcon, ClockIcon, ShieldCheckIcon, ExclamationTriangleIcon, DocumentCheckIcon, HomeIcon, CreditCardIcon, BanknotesIcon, TableCellsIcon, FilterIcon, UserCircleIcon, BuildingIcon, KeyIcon } from './Icons';
+import type { Property, Viewing, User, Application, Agreement, Payment, Task } from '../types';
+import { ViewingStatus, ApplicationStatus, PaymentType, TaskStatus } from '../types';
+import { MailIcon, DocumentTextIcon, CheckCircleIcon, XCircleIcon, PencilIcon, PlusCircleIcon, CalendarDaysIcon, ClockIcon, ShieldCheckIcon, ExclamationTriangleIcon, DocumentCheckIcon, HomeIcon, CreditCardIcon, BanknotesIcon, TableCellsIcon, FilterIcon, UserCircleIcon, BuildingIcon, KeyIcon, ClipboardDocumentListIcon } from './Icons';
 
 interface OwnerDashboardProps {
   user: User;
@@ -14,6 +14,8 @@ interface OwnerDashboardProps {
     tenantName: string;
     propertyTitle: string;
   }[];
+  tasks: Task[];
+  users: User[];
   onUpdateViewingStatus: (viewingId: string, status: ViewingStatus) => void;
   onUpdateApplicationStatus: (applicationId: string, status: ApplicationStatus) => void;
   onEditProperty: (property: Property) => void;
@@ -25,6 +27,8 @@ interface OwnerDashboardProps {
   onMarkAsRented: (propertyId: string) => void;
   onInitiateFinalizeAgreement: (application: Application, property: Property) => void;
   onConfirmKeyHandover: (applicationId: string) => void;
+  onAddTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'status' | 'createdBy'>) => void;
+  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
 }
 
 interface ViewingCardProps {
@@ -208,7 +212,7 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: string |
 );
 
 
-const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, properties, viewings, applications, agreements, paymentHistory, onUpdateViewingStatus, onUpdateApplicationStatus, onEditProperty, onPostPropertyClick, onSignAgreement, onViewAgreementDetails, onPayPlatformFee, onAcknowledgeOfflinePayment, onMarkAsRented, onInitiateFinalizeAgreement, onConfirmKeyHandover }) => {
+const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, properties, viewings, applications, agreements, paymentHistory, tasks, users, onUpdateViewingStatus, onUpdateApplicationStatus, onEditProperty, onPostPropertyClick, onSignAgreement, onViewAgreementDetails, onPayPlatformFee, onAcknowledgeOfflinePayment, onMarkAsRented, onInitiateFinalizeAgreement, onConfirmKeyHandover, onAddTask, onUpdateTaskStatus }) => {
     const [activeTab, setActiveTab] = useState('actions');
     const [filterType, setFilterType] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
@@ -303,6 +307,7 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, properties, viewi
             
             <div className="border-b mb-6">
                 <TabButton id="actions" label="Action Required" count={pendingActionCount} />
+                <TabButton id="tasks" label="Tasks" count={tasks.filter(t => t.status !== TaskStatus.DONE).length} />
                 <TabButton id="viewings" label="All Viewings" count={viewings.length} />
                 <TabButton id="applications" label="All Applications" count={applications.length} />
                 <TabButton id="agreements" label="Agreements" count={agreements.length} />
@@ -375,6 +380,10 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ user, properties, viewi
                 </div>
             )}
             
+            {activeTab === 'tasks' && (
+                <div>Render Tasks Here</div>
+            )}
+
             {activeTab === 'viewings' && (
                 <div>
                      {viewings.length > 0 ? (
