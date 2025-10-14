@@ -19,6 +19,8 @@ const ActivityIcon: React.FC<{ type: ActivityType }> = ({ type }) => {
         [ActivityType.SIGNED_AGREEMENT]: <Icons.DocumentCheckIcon className="w-5 h-5 text-teal-500" />,
         [ActivityType.RAISED_DISPUTE]: <Icons.ExclamationTriangleIcon className="w-5 h-5 text-red-500" />,
         [ActivityType.AGREEMENT_ACTION_REQUIRED]: <Icons.PencilIcon className="w-5 h-5 text-orange-500" />,
+        [ActivityType.CREATED_TASK]: <Icons.ClipboardDocumentListIcon className="w-5 h-5 text-gray-500" />,
+        [ActivityType.COMPLETED_TASK]: <Icons.CheckCircleIcon className="w-5 h-5 text-green-500" />,
     };
     return <div className="flex items-center justify-center w-10 h-10 bg-neutral-100 rounded-full">{iconMap[type] || <Icons.ListBulletIcon className="w-5 h-5 text-gray-500" />}</div>;
 };
