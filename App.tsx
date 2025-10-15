@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, Task } from './types';
 import { UserRole, ApplicationStatus, FurnishingStatus, Facing, ViewingStatus, VerificationStatus, BillType, DisputeStatus, ActivityType, NotificationType, PaymentType, TaskStatus } from './types';
@@ -9,7 +9,7 @@ import PropertyDetails from './components/PropertyDetails';
 import OwnerDashboard from './components/OwnerDashboard';
 import AgreementView from './components/AgreementView';
 import PaymentPortal from './components/PaymentPortal';
-import TenantDashboard from './components/RenterDashboard';
+import RenterDashboard from './components/RenterDashboard';
 import LoginPage from './components/LoginPage';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import HomePage from './components/HomePage';
@@ -67,7 +67,7 @@ const App: React.FC = () => {
 
   // View state
   const [currentView, setCurrentView] = useState('home'); // home, login, browsing, propertyDetails, booking, dashboard, etc.
-  const [loggedInView, setLoggedInView] = useState('dashboard'); // 'dashboard', 'profile', 'activity'
+  const [dashboardView, setDashboardView] = useState('dashboard'); // Controls active tab in dashboards, or 'profile', 'activity'
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isPostingProperty, setIsPostingProperty] = useState(false);
@@ -284,7 +284,7 @@ const App: React.FC = () => {
       setEditingProperty(null);
       setIsPostingProperty(false);
       setInitialSearchTerm('');
-      setLoggedInView('dashboard');
+      setDashboardView('dashboard');
       if (currentUser) {
           setCurrentView('dashboard');
       }
@@ -305,7 +305,7 @@ const App: React.FC = () => {
             }
         }
 
-        setLoggedInView('dashboard');
+        setDashboardView(user.role === UserRole.RENTER ? 'agreements' : 'actions');
         setCurrentView('dashboard');
     } else {
         alert("Login failed. Please check your email and password. For the demo, select a role on the login page to auto-fill credentials.");
@@ -337,6 +337,7 @@ const App: React.FC = () => {
 
     // Auto-login the new user
     setCurrentUser(newUser);
+    setDashboardView(newUser.role === UserRole.RENTER ? 'agreements' : 'actions');
     setCurrentView('dashboard');
     
     return true;
@@ -747,20 +748,14 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleNavigateToProfile = () => {
-    setLoggedInView('profile');
-  };
-
-  const handleNavigateToActivity = () => {
-    setLoggedInView('activity');
-  };
-  
-  const handleNavigateToDashboard = () => {
-    setLoggedInView('dashboard');
+  const handleNavigate = (view: string) => {
     setCurrentView('dashboard');
-    setSelectedProperty(null);
-    setEditingProperty(null);
-    setIsPostingProperty(false);
+    if (view === 'dashboard' && currentUser) {
+        const defaultView = currentUser.role === UserRole.RENTER ? 'agreements' : 'actions';
+        setDashboardView(defaultView);
+    } else {
+        setDashboardView(view);
+    }
   };
 
   const handleNavigateToBrowsing = () => {
@@ -779,7 +774,7 @@ const App: React.FC = () => {
       console.error("Failed to save users to localStorage", error);
     }
     
-    setLoggedInView('dashboard');
+    handleNavigate('dashboard');
     alert("Profile updated successfully!");
   };
 
@@ -1331,12 +1326,11 @@ const App: React.FC = () => {
               currentUser={currentUser} 
               onLogout={handleLogout} 
               onSearch={handleLocationSearch} 
-              onNavigateToProfile={handleNavigateToProfile} 
-              onNavigateToActivity={handleNavigateToActivity} 
+              onNavigate={handleNavigate}
+              onPostPropertyClick={handleShowPostPropertyForm}
               notifications={userNotifications} 
               onMarkAllAsRead={handleMarkAllNotificationsAsRead}
               onBrowseClick={handleNavigateToBrowsing}
-              onNavigateToDashboard={handleNavigateToDashboard}
           />
        );
 
@@ -1384,7 +1378,7 @@ const App: React.FC = () => {
                             bookingDetails={lastBookingDetails} 
                             onGoToDashboard={() => {
                                 setCurrentView('dashboard');
-                                setLoggedInView('dashboard');
+                                handleNavigate('dashboard');
                                 setLastBookingDetails(null);
                             }}
                             onBrowseMore={() => {
@@ -1418,25 +1412,25 @@ const App: React.FC = () => {
         );
       }
       
-       if (loggedInView === 'profile') {
+       if (dashboardView === 'profile') {
             return (
               <div className="min-h-screen bg-neutral-100 font-sans flex flex-col">
                 {header}
                 <main className="flex-grow container mx-auto p-4 md:p-8">
-                  <ProfilePage user={currentUser} onUpdateProfile={handleUpdateProfile} onBack={() => setLoggedInView('dashboard')} />
+                  <ProfilePage user={currentUser} onUpdateProfile={handleUpdateProfile} onBack={() => handleNavigate('dashboard')} />
                 </main>
                 <Footer onLocationSearch={handleLocationSearch} nearbyLocations={nearbyLocations} />
               </div>
             );
         }
 
-        if (loggedInView === 'activity') {
+        if (dashboardView === 'activity') {
             const userActivity = activityLogs.filter(log => log.userId === currentUser.id);
              return (
               <div className="min-h-screen bg-neutral-100 font-sans flex flex-col">
                 {header}
                 <main className="flex-grow container mx-auto p-4 md:p-8">
-                  <ActivityLogPage activities={userActivity} onBack={() => setLoggedInView('dashboard')} />
+                  <ActivityLogPage activities={userActivity} onBack={() => handleNavigate('dashboard')} />
                 </main>
                 <Footer onLocationSearch={handleLocationSearch} nearbyLocations={nearbyLocations} />
               </div>
@@ -1459,6 +1453,11 @@ const App: React.FC = () => {
                 return property ? { agreement: a, property } : null;
             }).filter((a): a is { agreement: Agreement, property: Property } => a !== null);
             
+            const relevantUsersForTasks = useMemo(() => {
+                const ownerIds = new Set(safeAgreements.map(a => a.property.ownerId));
+                return users.filter(u => u.id === currentUser.id || ownerIds.has(u.id));
+            }, [users, safeAgreements, currentUser.id]);
+            
             const safeViewings = renterViewings.map(v => {
                 const property = properties.find(p => p.id === v.propertyId);
                 return property ? { viewing: v, property } : null;
@@ -1477,17 +1476,19 @@ const App: React.FC = () => {
                 submittedAt: '' 
             };
 
-            view = <TenantDashboard
+            view = <RenterDashboard
                         user={currentUser}
                         agreements={safeAgreements}
                         viewings={safeViewings}
                         applications={safeRenterApplications}
                         payments={renterPayments}
-                        properties={properties}
+                        properties={safeAgreements.map(a => a.property)}
                         bills={renterBills}
                         verification={safeVerification}
                         tasks={renterTasks}
-                        users={users}
+                        users={relevantUsersForTasks}
+                        activeTab={dashboardView}
+                        onTabChange={setDashboardView}
                         onSubmitVerification={handleSubmitVerification}
                         onPayBill={handlePayBill}
                         onRaiseDispute={(relatedId, type) => handleRaiseDispute(relatedId, type as any)}
@@ -1502,7 +1503,7 @@ const App: React.FC = () => {
             break;
           case UserRole.OWNER:
             if (editingProperty) {
-              view = <EditPropertyForm property={editingProperty} onSubmit={handleUpdateProperty} onCancel={handleCancelEdit} onNavigateToHome={resetToHome} onNavigateToDashboard={handleNavigateToDashboard} />;
+              view = <EditPropertyForm property={editingProperty} onSubmit={handleUpdateProperty} onCancel={handleCancelEdit} onNavigateToHome={resetToHome} onNavigateToDashboard={() => handleNavigate('dashboard')} />;
             } else if (isPostingProperty) {
               view = <PostPropertyForm onSubmit={handleAddProperty} onCancel={handleCancelPostProperty} />;
             } else {
@@ -1513,6 +1514,13 @@ const App: React.FC = () => {
               const ownerAgreements = agreements.filter(a => ownerPropertyIds.includes(a.propertyId));
               const ownerPayments = payments.filter(p => ownerPropertyIds.includes(p.propertyId) || p.userId === currentUser.id);
               const ownerTasks = tasks.filter(t => ownerPropertyIds.includes(t.propertyId));
+
+              const relevantUsersForTasks = useMemo(() => {
+                  const activeTenantIds = new Set(
+                      ownerAgreements.filter(a => a.signedByOwner && a.signedByTenant).map(a => a.tenantId)
+                  );
+                  return users.filter(u => u.id === currentUser.id || activeTenantIds.has(u.id));
+              }, [users, ownerAgreements, currentUser.id]);
 
               const safePaymentHistory = ownerPayments.map(payment => {
                 const tenant = users.find(u => u.id === payment.userId);
@@ -1550,7 +1558,9 @@ const App: React.FC = () => {
                       agreements={safeOwnerAgreements}
                       paymentHistory={safePaymentHistory}
                       tasks={ownerTasks}
-                      users={users}
+                      users={relevantUsersForTasks}
+                      activeTab={dashboardView}
+                      onTabChange={setDashboardView}
                       onUpdateViewingStatus={handleUpdateViewingStatus}
                       onUpdateApplicationStatus={handleUpdateApplicationStatus}
                       onEditProperty={handleSelectPropertyForEdit}
@@ -1612,7 +1622,7 @@ const App: React.FC = () => {
                     bookingDetails={lastBookingDetails} 
                     onGoToDashboard={() => {
                         setCurrentView('dashboard');
-                        setLoggedInView('dashboard');
+                        handleNavigate('dashboard');
                         setLastBookingDetails(null);
                     }}
                     onBrowseMore={() => {

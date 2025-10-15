@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, Task } from '../types';
 import { BillType, ApplicationStatus, PaymentType, ViewingStatus, TaskStatus } from '../types';
 import * as Icons from './Icons';
 import VerificationForm from './VerificationForm';
 
-interface TenantDashboardProps {
+interface RenterDashboardProps {
   user: User;
   agreements: { agreement: Agreement, property: Property }[];
   viewings: { viewing: Viewing, property: Property }[];
@@ -15,6 +15,8 @@ interface TenantDashboardProps {
   verification: Verification;
   tasks: Task[];
   users: User[];
+  activeTab: string;
+  onTabChange: (tab: string) => void;
   onSubmitVerification: (formData: Record<string, any>) => void;
   onPayBill: (billId: string) => void;
   onRaiseDispute: (relatedId: string, type: 'Viewing' | 'Payment' | 'Property') => void;
@@ -88,13 +90,12 @@ const TaskCard: React.FC<{ task: Task, users: User[], onUpdateStatus: (taskId: s
                 )}
             </div>
             {task.description && <p className="text-sm text-neutral-600 mt-1">{task.description}</p>}
-            <div className="mt-3 pt-3 border-t text-xs text-neutral-500 grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div><strong className="font-semibold text-neutral-600">Property:</strong> {property?.title || 'N/A'}</div>
-                <div><strong className="font-semibold text-neutral-600">Assigned to:</strong> {assignedTo?.name || 'N/A'}</div>
-                <div><strong className="font-semibold text-neutral-600">Created by:</strong> {createdBy?.name || 'N/A'}</div>
-                <div><strong className="font-semibold text-neutral-600">Created on:</strong> {new Date(task.createdAt).toLocaleDateString()}</div>
-            </div>
-            <div className="mt-3 flex justify-end items-center">
+            
+            <div className="mt-4 pt-4 border-t flex flex-wrap justify-between items-center gap-4">
+                <div className="flex items-center gap-2 text-sm">
+                    <strong className="font-semibold text-neutral-600">Property:</strong>
+                    <span className="text-neutral-500">{property?.title || 'N/A'}</span>
+                </div>
                 <div className="flex items-center gap-2">
                     <label htmlFor={`status-${task.id}`} className="text-sm font-medium">Status:</label>
                     <select
@@ -105,6 +106,31 @@ const TaskCard: React.FC<{ task: Task, users: User[], onUpdateStatus: (taskId: s
                     >
                         {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-sm">
+                 <div className="flex items-center gap-2">
+                    {assignedTo?.profilePictureUrl ? (
+                        <img src={assignedTo.profilePictureUrl} alt={assignedTo.name} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                        <Icons.UserCircleIcon className="w-8 h-8 text-neutral-400" />
+                    )}
+                    <div>
+                        <p className="text-xs text-neutral-500">Assigned To</p>
+                        <p className="font-semibold text-neutral-700">{assignedTo?.name || 'Unassigned'}</p>
+                    </div>
+                </div>
+                 <div className="flex items-center gap-2">
+                    {createdBy?.profilePictureUrl ? (
+                        <img src={createdBy.profilePictureUrl} alt={createdBy.name} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                        <Icons.UserCircleIcon className="w-8 h-8 text-neutral-400" />
+                    )}
+                    <div>
+                        <p className="text-xs text-neutral-500">Created By</p>
+                        <p className="font-semibold text-neutral-700">{createdBy?.name || 'Unknown'}</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -120,12 +146,21 @@ const CreateTaskModal: React.FC<{
     const [taskData, setTaskData] = useState({
         title: '',
         description: '',
-        propertyId: properties[0]?.id || '',
-        assignedToId: users[0]?.id || '',
+        propertyId: '',
+        assignedToId: '',
         dueDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     });
     const [error, setError] = useState('');
     const today = new Date().toISOString().split('T')[0];
+
+    useEffect(() => {
+        if (!taskData.assignedToId && users.length > 0) {
+            setTaskData(prev => ({ ...prev, assignedToId: users[0].id }));
+        }
+        if (!taskData.propertyId && properties.length > 0) {
+            setTaskData(prev => ({ ...prev, propertyId: properties[0].id }));
+        }
+    }, [users, properties, taskData.assignedToId, taskData.propertyId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setTaskData({ ...taskData, [e.target.name]: e.target.value });
@@ -191,8 +226,7 @@ const CreateTaskModal: React.FC<{
     );
 };
 
-const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, viewings, applications, payments, properties, bills, verification, tasks, users, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onAddTask, onUpdateTaskStatus }) => {
-    const [activeTab, setActiveTab] = useState('agreements');
+const RenterDashboard: React.FC<RenterDashboardProps> = ({ user, agreements, viewings, applications, payments, properties, bills, verification, tasks, users, activeTab, onTabChange, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onAddTask, onUpdateTaskStatus }) => {
     const [paymentFilterType, setPaymentFilterType] = useState('');
     const [paymentFilterStatus, setPaymentFilterStatus] = useState('');
     const [paymentFilterStartDate, setPaymentFilterStartDate] = useState('');
@@ -245,7 +279,7 @@ const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, vie
 
     const TabButton = ({ id, label, count }: { id: string, label: string, count?: number }) => (
         <button
-            onClick={() => setActiveTab(id)}
+            onClick={() => onTabChange(id)}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors flex items-center gap-2 ${activeTab === id ? 'border-primary text-primary' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
         >
             {label} {typeof count !== 'undefined' && count > 0 && <span className="bg-primary/10 text-primary text-xs font-bold rounded-full px-2 py-0.5">{count}</span>}
@@ -668,4 +702,4 @@ const TenantDashboard: React.FC<TenantDashboardProps> = ({ user, agreements, vie
     );
 };
 
-export default TenantDashboard;
+export default RenterDashboard;

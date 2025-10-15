@@ -1,19 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserRole } from '../types';
 import type { User, Notification } from '../types';
-import { HomeIcon, LogoutIcon, UserCircleIcon, ListBulletIcon, CreditCardIcon, BanknotesIcon, StarIcon, PencilIcon, SearchIcon, LocationMarkerIcon, BellIcon } from './Icons';
+import { HomeIcon, LogoutIcon, UserCircleIcon, ListBulletIcon, CreditCardIcon, BanknotesIcon, StarIcon, PencilIcon, SearchIcon, LocationMarkerIcon, BellIcon, BuildingIcon, PlusCircleIcon, DocumentCheckIcon, ClipboardDocumentListIcon } from './Icons';
 
 interface HeaderProps {
   currentUser: User | null;
   onLogout?: () => void;
   onLoginClick?: () => void;
   onSearch?: (searchTerm: string) => void;
-  onNavigateToProfile?: () => void;
-  onNavigateToActivity?: () => void;
+  onNavigate?: (view: string) => void;
+  onPostPropertyClick?: () => void;
   notifications?: Notification[];
   onMarkAllAsRead?: () => void;
   onBrowseClick?: () => void;
-  onNavigateToDashboard?: () => void;
 }
 
 const timeSince = (dateString: string) => {
@@ -34,7 +33,7 @@ const timeSince = (dateString: string) => {
     return "Just now";
 };
 
-const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, onSearch, onNavigateToProfile, onNavigateToActivity, notifications = [], onMarkAllAsRead, onBrowseClick, onNavigateToDashboard }) => {
+const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, onSearch, onNavigate, onPostPropertyClick, notifications = [], onMarkAllAsRead, onBrowseClick }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -54,6 +53,11 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
     if (onSearch) {
       onSearch('near me');
     }
+  };
+
+  const handleNavClick = (view: string) => {
+    onNavigate?.(view);
+    setIsProfileMenuOpen(false);
   };
   
   // Close menu on outside click
@@ -85,6 +89,40 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
       default: return '';
     }
   };
+
+  const renderOwnerMenu = () => (
+    <>
+      <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('dashboard'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <HomeIcon className="w-5 h-5 text-gray-500"/> My Dashboard
+      </a>
+       <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('properties'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <BuildingIcon className="w-5 h-5 text-gray-500"/> My Properties
+      </a>
+      <a href="#" onClick={(e) => { e.preventDefault(); onPostPropertyClick?.(); setIsProfileMenuOpen(false); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <PlusCircleIcon className="w-5 h-5 text-gray-500"/> Post New Property
+      </a>
+       <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('paymentHistory'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <CreditCardIcon className="w-5 h-5 text-gray-500"/> Payment History
+      </a>
+    </>
+  );
+
+  const renderRenterMenu = () => (
+     <>
+      <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('dashboard'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <HomeIcon className="w-5 h-5 text-gray-500"/> My Dashboard
+      </a>
+       <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('agreements'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <DocumentCheckIcon className="w-5 h-5 text-gray-500"/> My Rentals
+      </a>
+       <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('bills'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <BanknotesIcon className="w-5 h-5 text-gray-500"/> Bills & Payments
+      </a>
+       <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('history'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <CreditCardIcon className="w-5 h-5 text-gray-500"/> Payment History
+      </a>
+    </>
+  );
 
   return (
     <header className="bg-white shadow-md sticky top-0 z-10">
@@ -199,25 +237,14 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
                             <p className="text-xs mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">{getRoleName(currentUser.role)}</p>
                         </div>
                         <div className="border-t border-gray-100"></div>
-                        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateToDashboard?.(); setIsProfileMenuOpen(false); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <HomeIcon className="w-5 h-5 text-gray-500"/> My Dashboard
-                        </a>
-                        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateToActivity?.(); setIsProfileMenuOpen(false); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        {currentUser.role === UserRole.OWNER && renderOwnerMenu()}
+                        {currentUser.role === UserRole.RENTER && renderRenterMenu()}
+                        
+                        <div className="border-t border-gray-100"></div>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('activity'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                             <ListBulletIcon className="w-5 h-5 text-gray-500"/> My Activity
                         </a>
-                        <a href="#" className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <CreditCardIcon className="w-5 h-5 text-gray-500"/> My Transactions
-                        </a>
-                        <a href="#" className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <BanknotesIcon className="w-5 h-5 text-gray-500"/> Home Loans
-                        </a>
-                        <a href="#" className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                              <span className="flex items-center gap-3">
-                                  <StarIcon className="w-5 h-5 text-gray-500"/> My Reviews
-                              </span>
-                              <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">NEW</span>
-                        </a>
-                        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateToProfile?.(); setIsProfileMenuOpen(false); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleNavClick('profile'); }} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                             <PencilIcon className="w-5 h-5 text-gray-500"/> Edit Profile
                         </a>
                         <div className="border-t border-gray-100"></div>
