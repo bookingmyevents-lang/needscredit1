@@ -94,7 +94,7 @@ const App: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>(mockReviews);
 
   // View state
-  const [currentView, setCurrentView] = useState('home'); // home, login, browsing, propertyDetails, booking, dashboard, etc.
+  const [currentView, setCurrentView] = useState('browsing'); // home, login, browsing, propertyDetails, booking, dashboard, etc.
   const [dashboardView, setDashboardView] = useState('overview'); // Controls active tab in dashboards, or 'profile', 'activity'
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
