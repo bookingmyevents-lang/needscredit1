@@ -15,12 +15,14 @@ const ActivityIcon: React.FC<{ type: ActivityType }> = ({ type }) => {
         [ActivityType.SUBMITTED_APPLICATION]: <Icons.DocumentTextIcon className="w-5 h-5 text-indigo-500" />,
         [ActivityType.APPROVED_APPLICATION]: <Icons.CheckCircleIcon className="w-5 h-5 text-green-500" />,
         [ActivityType.PAID_BILL]: <Icons.CreditCardIcon className="w-5 h-5 text-green-500" />,
+        [ActivityType.GENERATED_BILL]: <Icons.BanknotesIcon className="w-5 h-5 text-blue-500" />,
         [ActivityType.PAID_RENT]: <Icons.BanknotesIcon className="w-5 h-5 text-green-500" />,
         [ActivityType.SIGNED_AGREEMENT]: <Icons.DocumentCheckIcon className="w-5 h-5 text-teal-500" />,
         [ActivityType.RAISED_DISPUTE]: <Icons.ExclamationTriangleIcon className="w-5 h-5 text-red-500" />,
         [ActivityType.AGREEMENT_ACTION_REQUIRED]: <Icons.PencilIcon className="w-5 h-5 text-orange-500" />,
-        [ActivityType.CREATED_TASK]: <Icons.ClipboardDocumentListIcon className="w-5 h-5 text-gray-500" />,
-        [ActivityType.COMPLETED_TASK]: <Icons.CheckCircleIcon className="w-5 h-5 text-green-500" />,
+        [ActivityType.CREATED_MAINTENANCE_REQUEST]: <Icons.ClipboardDocumentListIcon className="w-5 h-5 text-gray-500" />,
+        [ActivityType.COMPLETED_MAINTENANCE_REQUEST]: <Icons.CheckCircleIcon className="w-5 h-5 text-green-500" />,
+        [ActivityType.LEFT_REVIEW]: <Icons.StarIcon className="w-5 h-5 text-yellow-500" />,
     };
     return <div className="flex items-center justify-center w-10 h-10 bg-neutral-100 rounded-full">{iconMap[type] || <Icons.ListBulletIcon className="w-5 h-5 text-gray-500" />}</div>;
 };

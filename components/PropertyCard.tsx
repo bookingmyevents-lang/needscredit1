@@ -1,15 +1,18 @@
 import React, { useState, useRef } from 'react';
 import type { Property, User } from '../types';
 import { FurnishingStatus } from '../types';
-import { BedIcon, BathIcon, RulerIcon, ShieldCheckIcon, ChevronLeftIcon, ChevronRightIcon, LocationMarkerIcon } from './Icons';
+import { BedIcon, BathIcon, RulerIcon, ShieldCheckIcon, ChevronLeftIcon, ChevronRightIcon, LocationMarkerIcon, HeartIcon } from './Icons';
 
 interface PropertyCardProps {
-  property: Property;
+  property: Property & { distance?: number };
   owner?: User;
   onSelectProperty: (property: Property) => void;
+  isSaved: boolean;
+  onToggleSave: (propertyId: string) => void;
+  currentUser: User | null;
 }
 
-const PropertyCard: React.FC<PropertyCardProps> = ({ property, owner, onSelectProperty }) => {
+const PropertyCard: React.FC<PropertyCardProps> = ({ property, owner, onSelectProperty, isSaved, onToggleSave, currentUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
@@ -53,10 +56,15 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, owner, onSelectPr
     touchStartX.current = null;
     touchEndX.current = null;
   };
+  
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleSave(property.id);
+  };
 
   return (
     <div
-      className="bg-white rounded-lg shadow-md border border-neutral-200 overflow-hidden transition-shadow duration-300 hover:shadow-xl"
+      className="bg-white rounded-lg shadow-md border border-neutral-200 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
     >
       <div className="flex flex-col sm:flex-row">
         {/* Image Carousel */}
@@ -74,6 +82,17 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, owner, onSelectPr
             loading="lazy"
           />
            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+           
+           {(!currentUser || currentUser.role === 'RENTER') && (
+              <button
+                  onClick={handleSaveClick}
+                  className="absolute top-2 right-2 bg-black/40 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+                  title={isSaved ? "Unsave Property" : "Save Property"}
+              >
+                  <HeartIcon className={`w-5 h-5 transition-colors ${isSaved ? 'text-red-500 fill-current' : 'text-white'}`} />
+              </button>
+           )}
+
            {property.images?.length > 1 && (
             <>
               <button onClick={prevImage} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-1.5 rounded-full hover:bg-black/70 transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none">
@@ -114,6 +133,12 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, owner, onSelectPr
                     <LocationMarkerIcon className="w-4 h-4 flex-shrink-0" />
                     <span>{property.address || 'No address provided'}</span>
                 </p>
+
+                {property.distance !== undefined && (
+                    <p className="text-sm text-blue-600 font-semibold mt-1">
+                        {property.distance.toFixed(1)} km away
+                    </p>
+                )}
 
                 <div className="my-4 py-3 border-y grid grid-cols-3 gap-2 text-center text-sm text-neutral-700">
                     <div className="flex flex-col items-center gap-1">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import * as L from 'leaflet';
 import { SearchIcon, CrosshairIcon, LayersIcon } from './Icons';
@@ -27,21 +27,21 @@ interface MapControllerProps {
 
 const MapController: React.FC<MapControllerProps> = ({ onBoundsChange, onClick }) => {
     const map = useMap();
-    const [isSearchButtonVisible, setIsSearchButtonVisible] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
 
     useMapEvents({
-        dragend: () => onBoundsChange && setIsSearchButtonVisible(true),
-        zoomend: () => onBoundsChange && setIsSearchButtonVisible(true),
+        dragend: () => {
+            if (onBoundsChange) {
+                onBoundsChange(map.getBounds());
+            }
+        },
+        zoomend: () => {
+            if (onBoundsChange) {
+                onBoundsChange(map.getBounds());
+            }
+        },
         click: (e) => onClick && onClick(e.latlng),
     });
-
-    const handleSearchClick = () => {
-        if (onBoundsChange) {
-            onBoundsChange(map.getBounds());
-            setIsSearchButtonVisible(false);
-        }
-    };
     
     const handleCenterOnLocation = () => {
         setIsLocating(true);
@@ -56,17 +56,7 @@ const MapController: React.FC<MapControllerProps> = ({ onBoundsChange, onClick }
 
     return (
         <>
-            {onBoundsChange && isSearchButtonVisible && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] drop-shadow-lg">
-                    <button
-                        onClick={handleSearchClick}
-                        className="bg-primary hover:bg-secondary text-white font-bold py-2 px-5 rounded-full flex items-center gap-2 transition-colors"
-                    >
-                        <SearchIcon className="w-5 h-5" />
-                        Search this area
-                    </button>
-                </div>
-            )}
+            {/* The "Search this area" button is removed to allow for dynamic updates. */}
             <div className="absolute bottom-4 right-4 z-[1000]">
                 <button
                     onClick={handleCenterOnLocation}
@@ -88,6 +78,13 @@ const MapController: React.FC<MapControllerProps> = ({ onBoundsChange, onClick }
     );
 };
 
+const ChangeView: React.FC<{ center: [number, number], zoom: number }> = ({ center, zoom }) => {
+    const map = useMap();
+    useEffect(() => {
+        map.flyTo(center, zoom);
+    }, [center, zoom, map]);
+    return null;
+}
 
 interface MapMarker {
     id: string;
@@ -124,7 +121,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ markers, center, zoom, clas
     
     return (
         <div className={`relative ${className}`}>
-            <MapContainer key={`${center.join('-')}-${markers.length}-${mapType}`} center={center} zoom={zoom} scrollWheelZoom={true} className="h-full w-full">
+            <MapContainer center={center} zoom={zoom} scrollWheelZoom={true} className="h-full w-full">
+                <ChangeView center={center} zoom={zoom} />
                 <TileLayer
                     key={mapType}
                     attribution={tileLayers[mapType].attribution}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { User } from '../types';
+import { UserRole, NotificationType } from '../types';
 import { PencilIcon, SaveIcon, MailIcon, PhoneIcon, UserCircleIcon, XCircleIcon } from './Icons';
 import ImageUploader from './ImageUploader';
 
@@ -9,144 +10,192 @@ interface ProfilePageProps {
   onBack: () => void;
 }
 
+const notificationLabels: Record<NotificationType, string> = {
+    [NotificationType.NEW_VIEWING_REQUEST]: "New viewing requests on your properties",
+    [NotificationType.APPLICATION_STATUS_UPDATE]: "Updates on your rental applications",
+    [NotificationType.VIEWING_STATUS_UPDATE]: "Updates on your viewing requests",
+    [NotificationType.RENT_DUE_SOON]: "Reminders when rent is due soon",
+    [NotificationType.AGREEMENT_ACTION_REQUIRED]: "When a rental agreement needs your action",
+    [NotificationType.NEW_PAYMENT_RECEIVED]: "Confirmation of payments you receive",
+    [NotificationType.PLATFORM_FEE_DUE_OWNER]: "Platform fee payment reminders",
+    [NotificationType.OFFLINE_PAYMENT_SUBMITTED]: "When a tenant submits offline payment proof",
+    [NotificationType.OFFLINE_PAYMENT_CONFIRMED]: "Confirmation of your offline payment",
+    [NotificationType.DEPOSIT_PAYMENT_DUE]: "Security deposit payment reminders",
+    [NotificationType.KEYS_HANDOVER_READY]: "When a property is ready for key handover",
+    [NotificationType.NEW_MAINTENANCE_REQUEST]: "When a new maintenance request is created",
+    [NotificationType.MAINTENANCE_STATUS_UPDATE]: "Updates on maintenance request status",
+    [NotificationType.NEW_BILL_GENERATED]: "When a new bill is generated for you",
+    [NotificationType.REFUND_INITIATED]: "Notifications about refund status",
+    [NotificationType.NEW_REVIEW_RECEIVED]: "When a new review is received for your property",
+};
+
+const ownerPreferences: NotificationType[] = [
+    NotificationType.NEW_VIEWING_REQUEST,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    NotificationType.AGREEMENT_ACTION_REQUIRED,
+    NotificationType.NEW_PAYMENT_RECEIVED,
+    NotificationType.PLATFORM_FEE_DUE_OWNER,
+    NotificationType.OFFLINE_PAYMENT_SUBMITTED,
+    NotificationType.KEYS_HANDOVER_READY,
+    NotificationType.NEW_MAINTENANCE_REQUEST,
+    NotificationType.MAINTENANCE_STATUS_UPDATE,
+    NotificationType.NEW_REVIEW_RECEIVED,
+];
+
+const renterPreferences: NotificationType[] = [
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    NotificationType.VIEWING_STATUS_UPDATE,
+    NotificationType.RENT_DUE_SOON,
+    NotificationType.AGREEMENT_ACTION_REQUIRED,
+    NotificationType.OFFLINE_PAYMENT_CONFIRMED,
+    NotificationType.DEPOSIT_PAYMENT_DUE,
+    NotificationType.KEYS_HANDOVER_READY,
+    NotificationType.NEW_MAINTENANCE_REQUEST,
+    NotificationType.MAINTENANCE_STATUS_UPDATE,
+    NotificationType.NEW_BILL_GENERATED,
+    NotificationType.REFUND_INITIATED,
+];
+
 const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onBack }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user.name,
-    phoneNumber: user.phoneNumber || '',
-    profilePictureUrl: user.profilePictureUrl || '',
-    bio: user.bio || '',
-  });
+  const [editedUser, setEditedUser] = useState<User>(user);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditedUser(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleBankInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditedUser(prev => ({ ...prev, bankInfo: { ...prev.bankInfo, [name]: value } as User['bankInfo'] }));
+  };
+  
+  const handleNotificationChange = (type: NotificationType, isEnabled: boolean) => {
+      setEditedUser(prev => ({
+          ...prev,
+          notificationPreferences: {
+              ...prev.notificationPreferences,
+              [type]: isEnabled,
+          }
+      }));
+  };
 
   const handleSave = () => {
-    onUpdateProfile({
-      ...user,
-      name: formData.name,
-      phoneNumber: formData.phoneNumber,
-      profilePictureUrl: formData.profilePictureUrl,
-      bio: formData.bio,
-    });
+    onUpdateProfile(editedUser);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    setFormData({
-      name: user.name,
-      phoneNumber: user.phoneNumber || '',
-      profilePictureUrl: user.profilePictureUrl || '',
-      bio: user.bio || '',
-    });
+    setEditedUser(user);
     setIsEditing(false);
   };
 
-  const ProfileInfoRow: React.FC<{ icon: React.ReactNode; label: string; value: string; isEditable?: boolean }> = ({ icon, label, value, isEditable = false }) => (
-    <div className="flex items-start gap-4 py-3">
-      <div className="text-neutral-500 mt-1">{icon}</div>
-      <div>
-        <p className="text-sm text-neutral-500">{label}</p>
-        <p className={`font-semibold ${isEditable ? 'text-neutral-800' : 'text-neutral-500'}`}>{value}</p>
-      </div>
-    </div>
-  );
+  const preferencesToShow = user.role === UserRole.OWNER ? ownerPreferences : renterPreferences;
 
   return (
-    <div className="max-w-2xl mx-auto">
-       <button onClick={onBack} className="mb-4 text-sm font-medium text-primary hover:underline">
-            &larr; Back to Dashboard
-        </button>
+    <div className="max-w-4xl mx-auto">
+      <button onClick={onBack} className="mb-4 text-sm font-medium text-primary hover:underline">
+        &larr; Back to Dashboard
+      </button>
       <div className="bg-white p-8 rounded-lg shadow-lg border">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-6 gap-4">
-          <div>
-            <h2 className="text-3xl font-bold text-neutral-900">My Profile</h2>
-            <p className="text-neutral-600">View and edit your personal information.</p>
-          </div>
-          {!isEditing ? (
-            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-primary text-white font-semibold rounded-lg transition-colors duration-300 w-full sm:w-auto justify-center">
-              <PencilIcon className="w-5 h-5" />
-              Edit Profile
-            </button>
-          ) : (
-             <div className="flex gap-2 w-full sm:w-auto">
-                <button onClick={handleSave} className="flex-1 flex items-center gap-2 justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-300">
-                  <SaveIcon className="w-5 h-5" />
-                  Save
-                </button>
-                 <button onClick={handleCancel} className="flex-1 flex items-center gap-2 justify-center px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-lg transition-colors duration-300">
-                  <XCircleIcon className="w-5 h-5" />
-                  Cancel
-                </button>
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8 mb-8 pb-8 border-b">
+          <ImageUploader 
+            currentImageUrl={editedUser.profilePictureUrl}
+            onImageSelect={(base64) => setEditedUser(prev => ({...prev, profilePictureUrl: base64}))}
+          />
+          <div className="flex-grow text-center sm:text-left">
+            {isEditing ? (
+              <input type="text" name="name" value={editedUser.name} onChange={handleInputChange} className="text-3xl font-bold text-neutral-900 border-b-2 w-full mb-2"/>
+            ) : (
+              <h2 className="text-3xl font-bold text-neutral-900">{editedUser.name}</h2>
+            )}
+            <p className="text-neutral-600 flex items-center gap-2 justify-center sm:justify-start"><MailIcon className="w-5 h-5"/> {editedUser.email}</p>
+            {isEditing ? (
+                <input type="text" name="phoneNumber" value={editedUser.phoneNumber || ''} onChange={handleInputChange} className="text-neutral-600 border-b-2 w-full mt-1" placeholder="Phone Number"/>
+            ) : (
+                <p className="text-neutral-600 flex items-center gap-2 justify-center sm:justify-start"><PhoneIcon className="w-5 h-5"/> {editedUser.phoneNumber || 'Not provided'}</p>
+            )}
+             <div className="mt-4">
+              <span className={`inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full ${user.kycStatus === 'Verified' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                {user.kycStatus}
+              </span>
             </div>
+          </div>
+          {!isEditing && (
+            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-lg transition-colors duration-300">
+              <PencilIcon className="w-5 h-5"/> Edit Profile
+            </button>
           )}
         </div>
-        
-        {!isEditing ? (
-            <>
-                <div className="flex flex-col items-center text-center border-b pb-6 mb-6">
-                    {user.profilePictureUrl ? (
-                        <img src={user.profilePictureUrl} alt="Profile" className="w-32 h-32 rounded-full object-cover mb-4 border-4 border-white shadow-lg" />
-                    ) : (
-                        <UserCircleIcon className="w-32 h-32 text-neutral-300 mb-4" />
-                    )}
-                    <h3 className="text-2xl font-bold">{user.name}</h3>
-                    <p className="text-neutral-500">{user.email}</p>
-                    {user.bio && <p className="mt-4 text-neutral-600 max-w-md">{user.bio}</p>}
-                </div>
-                <div className="divide-y">
-                    <ProfileInfoRow icon={<MailIcon className="w-6 h-6" />} label="Email Address" value={user.email} />
-                    <ProfileInfoRow icon={<PhoneIcon className="w-6 h-6" />} label="Phone Number" value={user.phoneNumber || 'Not provided'} isEditable />
-                </div>
-            </>
-        ) : (
-            <div className="space-y-4">
-                 <div className="flex justify-center">
-                    <ImageUploader 
-                        currentImageUrl={formData.profilePictureUrl}
-                        onImageSelect={(base64) => setFormData(prev => ({...prev, profilePictureUrl: base64}))}
-                        size="large"
-                    />
-                 </div>
-                 <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <input 
-                        type="text" 
-                        id="name" 
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Phone Number</label>
-                    <input 
-                        type="tel" 
-                        id="phoneNumber" 
-                        value={formData.phoneNumber}
-                        onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                    />
-                </div>
-                 <div>
-                    <label htmlFor="bio" className="block text-sm font-medium text-gray-700">Short Bio</label>
-                    <textarea 
-                        id="bio"
-                        rows={3}
-                        value={formData.bio}
-                        onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Tell us a little about yourself..."
-                    />
-                </div>
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address (cannot be changed)</label>
-                    <input 
-                        type="email" 
-                        id="email" 
-                        value={user.email}
-                        disabled
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-neutral-100 text-neutral-500 cursor-not-allowed"
-                    />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+                 <h3 className="text-xl font-bold mb-4">About Me</h3>
+                {isEditing ? (
+                    <textarea name="bio" value={editedUser.bio || ''} onChange={handleInputChange} rows={5} className="w-full p-2 border rounded-md" placeholder="Tell us a little about yourself..."></textarea>
+                ) : (
+                    <p className="text-neutral-700 whitespace-pre-wrap">{editedUser.bio || 'No bio provided.'}</p>
+                )}
+                 {user.role === UserRole.OWNER && (
+                    <div className="mt-6">
+                        <h3 className="text-xl font-bold mb-4">Bank Information</h3>
+                        {isEditing ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium">Account Holder Name</label>
+                                    <input type="text" name="accountHolder" value={editedUser.bankInfo?.accountHolder || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium">Account Number</label>
+                                    <input type="text" name="accountNumber" value={editedUser.bankInfo?.accountNumber || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium">IFSC Code</label>
+                                    <input type="text" name="ifscCode" value={editedUser.bankInfo?.ifscCode || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2 text-sm text-neutral-700">
+                                <p><strong>Account Holder:</strong> {user.bankInfo?.accountHolder || 'N/A'}</p>
+                                <p><strong>Account Number:</strong> {user.bankInfo?.accountNumber || 'N/A'}</p>
+                                <p><strong>IFSC Code:</strong> {user.bankInfo?.ifscCode || 'N/A'}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+            <div>
+                <h3 className="text-xl font-bold mb-4">Notification Preferences</h3>
+                <div className="space-y-3">
+                    {preferencesToShow.map(type => (
+                        <div key={type} className="flex items-center justify-between">
+                            <label htmlFor={type} className="text-sm text-neutral-700">{notificationLabels[type]}</label>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    id={type}
+                                    checked={editedUser.notificationPreferences?.[type] ?? true} 
+                                    onChange={(e) => handleNotificationChange(type, e.target.checked)}
+                                    className="sr-only peer"
+                                    disabled={!isEditing}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                    ))}
                 </div>
             </div>
+        </div>
+
+        {isEditing && (
+          <div className="mt-8 pt-6 border-t flex justify-end gap-4">
+            <button onClick={handleCancel} className="flex items-center gap-2 px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-lg transition-colors duration-300">
+              <XCircleIcon className="w-5 h-5"/> Cancel
+            </button>
+            <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-primary text-white font-semibold rounded-lg transition-colors duration-300">
+              <SaveIcon className="w-5 h-5"/> Save Changes
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -101,7 +101,7 @@ const EditPropertyForm: React.FC<EditPropertyFormProps> = ({ property, onSubmit,
   const handleGenerateDescription = async () => {
     setIsGenerating(true);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
         const furnishingList = furnishingItems.map(item => `${item.quantity} ${item.name}`).join(', ');
         const amenitiesList = amenities.map(item => item.name).join(', ');
@@ -371,6 +371,19 @@ const EditPropertyForm: React.FC<EditPropertyFormProps> = ({ property, onSubmit,
                         <input id="image-upload" type="file" multiple accept="image/png, image/jpeg" onChange={handleImageUpload} className="sr-only" />
                     </label>
                 </div>
+            </div>
+
+            <div className="p-6 border border-gray-200 rounded-lg">
+                <h3 className="text-xl font-semibold mb-4 text-neutral-800">7. Virtual Tours</h3>
+                <FormInput 
+                    id="panoViewUrl" 
+                    name="panoViewUrl" 
+                    label="360° View URL" 
+                    type="url" 
+                    value={formData.panoViewUrl || ''} 
+                    onChange={handleChange as any} 
+                    placeholder="e.g., https://kuula.co/share/..."
+                />
             </div>
 
           <div className="pt-4 flex gap-4">

@@ -1,8 +1,8 @@
-import { Property, FurnishingStatus, Facing, Review, User, UserRole, Viewing, ViewingStatus, Agreement, Verification, VerificationStatus, Bill, BillType, Dispute, DisputeStatus, Payment, PaymentType, Application, ApplicationStatus, ActivityLog, ActivityType, Notification, NotificationType, Task, TaskStatus } from './types';
+import { Property, FurnishingStatus, Facing, Review, User, UserRole, Viewing, ViewingStatus, Agreement, Verification, VerificationStatus, Bill, BillType, Dispute, DisputeStatus, Payment, PaymentType, Application, ApplicationStatus, ActivityLog, ActivityType, Notification, NotificationType, MaintenanceRequest, MaintenanceStatus, MaintenanceCategory } from './types';
 
 export const mockReviews: Review[] = [
-    { id: 'review1', author: 'Kailash Chandra Tripathy', role: 'Owner', time: '1 year ago', rating: 5, goodThings: 'Within 50m from the Nandan Kanan Road. Close to proposed under construction metro rail. Close to proximity to Nandan Kanan.', needsImprovement: 'There is nothing I found from dislike prospective.' },
-    { id: 'review2', author: 'Arpan Pratik', role: 'Owner', time: '1 year ago', rating: 4, goodThings: 'This is a beautiful place to live. All the facilities are there in this property. Hospitals, restaurants, schools are near by.', needsImprovement: 'This is a little expensive according to the price, and the parking issues may be seen.' }
+    { id: 'review1', userId: 'some-past-user-1', author: 'Kailash Chandra Tripathy', role: 'Tenant', time: '1 year ago', rating: 5, goodThings: 'Within 50m from the Nandan Kanan Road. Close to proposed under construction metro rail. Close to proximity to Nandan Kanan.', needsImprovement: 'There is nothing I found from dislike prospective.' },
+    { id: 'review2', userId: 'some-past-user-2', author: 'Arpan Pratik', role: 'Tenant', time: '1 year ago', rating: 4, goodThings: 'This is a beautiful place to live. All the facilities are there in this property. Hospitals, restaurants, schools are near by.', needsImprovement: 'This is a little expensive according to the price, and the parking issues may be seen.' }
 ];
 
 export const mockUsers: User[] = [
@@ -15,7 +15,19 @@ export const mockUsers: User[] = [
     kycStatus: 'Not Verified', 
     phoneNumber: '9876543210',
     profilePictureUrl: 'https://i.pravatar.cc/150?u=renter@example.com',
-    bio: 'Looking for a quiet and clean place to call home. I work in tech and enjoy hiking on weekends.'
+    bio: 'Looking for a quiet and clean place to call home. I work in tech and enjoy hiking on weekends.',
+    notificationPreferences: {
+        [NotificationType.APPLICATION_STATUS_UPDATE]: true,
+        [NotificationType.VIEWING_STATUS_UPDATE]: true,
+        [NotificationType.RENT_DUE_SOON]: true,
+        [NotificationType.AGREEMENT_ACTION_REQUIRED]: true,
+        [NotificationType.OFFLINE_PAYMENT_CONFIRMED]: true,
+        [NotificationType.DEPOSIT_PAYMENT_DUE]: true,
+        [NotificationType.KEYS_HANDOVER_READY]: true,
+        [NotificationType.NEW_MAINTENANCE_REQUEST]: true,
+        [NotificationType.MAINTENANCE_STATUS_UPDATE]: true,
+        [NotificationType.NEW_BILL_GENERATED]: true,
+    }
   },
   { 
     id: 'user-owner', 
@@ -29,6 +41,18 @@ export const mockUsers: User[] = [
     profilePictureUrl: 'https://i.pravatar.cc/150?u=owner@example.com',
     bio: 'Proud owner of several properties in Bhubaneswar. I aim to provide comfortable and well-maintained homes for my tenants.',
     ownerCredit: 0,
+    notificationPreferences: {
+        [NotificationType.NEW_VIEWING_REQUEST]: true,
+        [NotificationType.APPLICATION_STATUS_UPDATE]: true,
+        [NotificationType.AGREEMENT_ACTION_REQUIRED]: true,
+        [NotificationType.NEW_PAYMENT_RECEIVED]: true,
+        [NotificationType.PLATFORM_FEE_DUE_OWNER]: true,
+        [NotificationType.OFFLINE_PAYMENT_SUBMITTED]: true,
+        [NotificationType.KEYS_HANDOVER_READY]: true,
+        [NotificationType.NEW_MAINTENANCE_REQUEST]: true,
+        [NotificationType.MAINTENANCE_STATUS_UPDATE]: true,
+        [NotificationType.NEW_REVIEW_RECEIVED]: true,
+    }
   },
   { 
     id: 'user-admin', 
@@ -39,7 +63,8 @@ export const mockUsers: User[] = [
     kycStatus: 'Verified', 
     phoneNumber: '7654321098',
     profilePictureUrl: 'https://i.pravatar.cc/150?u=admin@example.com',
-    bio: 'Keeping the RentEase platform running smoothly.'
+    bio: 'Keeping the RentEase platform running smoothly.',
+    notificationPreferences: {},
   },
 ];
 
@@ -48,7 +73,7 @@ export const mockProperties: Property[] = [
     id: 'prop1',
     ownerId: 'user-owner',
     title: '3 BHK Flat in SJ The Royal Lagoon',
-    address: 'SJ The Royal Lagoon, Raghunathpur, Bhubaneswar',
+    address: 'SJ The Royal Lagoon, Raghunathpur, Bhubaneswar, Khordha',
     rent: 44000,
     bedrooms: 3,
     bathrooms: 3,
@@ -82,15 +107,17 @@ export const mockProperties: Property[] = [
         { name: 'Apollo Hospitals', type: 'Hospital', distance: '2.8 km' },
         { name: 'Esplanade One Mall', type: 'Shopping', distance: '5.5 km' },
         { name: 'Barbeque Nation', type: 'Restaurant', distance: '2.6 km' },
+        { name: 'Patia P.H. Railway Station', type: 'Transport Hub', distance: '3.2 km' },
     ],
-    reviews: mockReviews,
+    reviewIds: ['review1', 'review2'],
     viewingAdvance: 500,
+    panoViewUrl: 'https://kuula.co/share/collection/7qV94?logo=1&info=1&fs=1&vr=0&sd=1&thumbs=1',
   },
   {
     id: 'prop2',
     ownerId: 'user-owner',
     title: 'Spacious 2BHK in Patia',
-    address: '456 Tech Towers, Patia, Bhubaneswar',
+    address: '456 Tech Towers, Patia, Bhubaneswar, Khordha',
     rent: 25000,
     bedrooms: 2,
     bathrooms: 2,
@@ -114,8 +141,14 @@ export const mockProperties: Property[] = [
     leaseType: 'Family',
     ageOfProperty: '5 years',
     furnishingItems: [{name: 'Wardrobe', quantity: 2, icon: 'WardrobeIcon'}],
-    nearbyPlaces: [{name: 'KIIT University', type: 'School', distance: '1.0 km'}],
-    reviews: [],
+    nearbyPlaces: [
+        { name: 'KIIT University', type: 'School', distance: '1.0 km' },
+        { name: 'KIMS Hospital', type: 'Hospital', distance: '1.5 km' },
+        { name: 'Infocity', type: 'IT Park', distance: '2.0 km' },
+        { name: 'Symphony Mall', type: 'Shopping', distance: '2.5 km' },
+        { name: 'Patia P.H. Railway Station', type: 'Transport Hub', distance: '3.0 km' },
+    ],
+    reviewIds: [],
     viewingAdvance: 500,
   },
   {
@@ -146,15 +179,21 @@ export const mockProperties: Property[] = [
     leaseType: 'Any',
     ageOfProperty: '5 years',
     furnishingItems: [],
-    nearbyPlaces: [{ name: 'Puri Beach', type: 'Park', distance: '0.1 km' }],
-    reviews: [],
+    nearbyPlaces: [
+        { name: 'Puri Beach', type: 'Park', distance: '0.1 km' },
+        { name: 'Puri Railway Station', type: 'Transport Hub', distance: '2.5 km' },
+        { name: 'Jagannath Temple', type: 'Park', distance: '3.0 km' },
+        { name: 'Puri Sea Beach Market', type: 'Shopping', distance: '1.0 km' },
+        { name: 'Wildgrass Restaurant', type: 'Restaurant', distance: '1.5 km' }
+    ],
+    reviewIds: [],
     viewingAdvance: 1000,
   },
   {
     id: 'prop4',
     ownerId: 'user-owner',
     title: 'Modern Studio Apartment in Infocity',
-    address: 'DLF Cybercity, Infocity, Bhubaneswar',
+    address: 'DLF Cybercity, Infocity, Bhubaneswar, Khordha',
     rent: 15000,
     bedrooms: 1,
     bathrooms: 1,
@@ -180,17 +219,20 @@ export const mockProperties: Property[] = [
     furnishingItems: [ { name: 'Bed', quantity: 1, icon: 'BedIcon' }, { name: 'AC', quantity: 1, icon: 'AcUnitIcon' }, { name: 'Wardrobe', quantity: 1, icon: 'WardrobeIcon' }, { name: 'Geyser', quantity: 1, icon: 'GeyserIcon' } ],
     nearbyPlaces: [ 
         { name: 'Infosys', type: 'IT Park', distance: '0.5 km' }, 
+        { name: 'Wipro', type: 'IT Park', distance: '0.8 km' },
         { name: 'Care Hospital', type: 'Hospital', distance: '2.0 km' }, 
-        { name: 'Infocity Food Court', type: 'Restaurant', distance: '0.3 km' } 
+        { name: 'Infocity Food Court', type: 'Restaurant', distance: '0.3 km' },
+        { name: 'DN Regalia Mall', type: 'Shopping', distance: '1.5 km' },
+        { name: 'Patia P.H. Railway Station', type: 'Transport Hub', distance: '2.5 km' },
     ],
-    reviews: [],
+    reviewIds: [],
     viewingAdvance: 500,
   },
   {
     id: 'prop5',
     ownerId: 'user-owner',
     title: '4 BHK Independent House in Nayapalli',
-    address: 'IRC Village, Nayapalli, Bhubaneswar',
+    address: 'IRC Village, Nayapalli, Bhubaneswar, Khordha',
     rent: 55000,
     bedrooms: 4,
     bathrooms: 4,
@@ -216,16 +258,19 @@ export const mockProperties: Property[] = [
     furnishingItems: [],
     nearbyPlaces: [ 
         { name: 'DAV Public School, Unit 8', type: 'School', distance: '1.5 km' }, 
-        { name: 'AMRI Hospital', type: 'Hospital', distance: '2.2 km' } 
+        { name: 'AMRI Hospital', type: 'Hospital', distance: '2.2 km' },
+        { name: 'Indira Gandhi Park', type: 'Park', distance: '3.0 km' },
+        { name: 'Forum Mart', type: 'Shopping', distance: '2.0 km' },
+        { name: 'Bhubaneswar Railway Station', type: 'Transport Hub', distance: '4.5 km' },
     ],
-    reviews: [],
+    reviewIds: [],
     viewingAdvance: 1000,
   },
   {
     id: 'prop6',
     ownerId: 'user-owner',
     title: 'Fully Furnished 2BHK near Airport',
-    address: 'Bapuji Nagar, Bhubaneswar',
+    address: 'Bapuji Nagar, Bhubaneswar, Khordha',
     rent: 35000,
     bedrooms: 2,
     bathrooms: 2,
@@ -258,10 +303,13 @@ export const mockProperties: Property[] = [
         { name: 'Washing Machine', quantity: 1, icon: 'WashingMachineIcon' },
     ],
     nearbyPlaces: [ 
-        { name: 'Bhubaneswar Railway Station', type: 'School', distance: '2.0 km' }, // Using school as a proxy for transit
-        { name: 'Capital Hospital', type: 'Hospital', distance: '1.5 km' } 
+        { name: 'Bhubaneswar Railway Station', type: 'Transport Hub', distance: '2.0 km' },
+        { name: 'Biju Patnaik International Airport', type: 'Transport Hub', distance: '3.0 km' },
+        { name: 'Capital Hospital', type: 'Hospital', distance: '1.5 km' },
+        { name: 'State Museum', type: 'Park', distance: '2.5 km' },
+        { name: 'Lingaraj Temple', type: 'Park', distance: '4.0 km' },
     ],
-    reviews: [],
+    reviewIds: [],
     viewingAdvance: 500,
   },
 ];
@@ -301,9 +349,9 @@ export const mockViewings: Viewing[] = [
         requestedAt: new Date().toISOString(),
         verificationData: {
             fullName: 'Ravi Kumar',
-            employmentDetails: 'Software Engineer at Google',
-            idProofUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-        }
+            employerName: 'Google',
+        },
+        paymentId: 'pay5',
     },
     { 
         id: 'view2', 
@@ -316,18 +364,41 @@ export const mockViewings: Viewing[] = [
         requestedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
         verificationData: {
             fullName: 'Priya Sharma',
-            employmentDetails: 'Product Manager at Microsoft',
-            idProofUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-        }
+            employerName: 'Microsoft',
+        },
+        paymentId: 'pay11',
     },
 ];
 
 export const mockAgreements: Agreement[] = [
-    { id: 'agree1', propertyId: 'prop3', tenantId: 'user-renter', ownerId: 'user-owner', rentAmount: 30000, depositAmount: 60000, startDate: '2024-07-01T00:00:00Z', signedByOwner: true, signedByTenant: true }
+    { id: 'agree1', propertyId: 'prop3', tenantId: 'user-renter', ownerId: 'user-owner', rentAmount: 30000, depositAmount: 60000, startDate: new Date(new Date().setMonth(new Date().getMonth() - 2)).toISOString(), endDate: new Date(new Date().setMonth(new Date().getMonth() + 9)).toISOString(), signedByOwner: true, signedByTenant: true, reviewLeft: false },
+    { id: 'agree2', propertyId: 'prop1', tenantId: 'user-renter', ownerId: 'user-owner', rentAmount: 44000, depositAmount: 88000, startDate: new Date(new Date().setFullYear(new Date().getFullYear() - 2)).toISOString(), endDate: new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString(), signedByOwner: true, signedByTenant: true, reviewLeft: true },
+    { id: 'agree3', propertyId: 'prop2', tenantId: 'user-renter', ownerId: 'user-owner', rentAmount: 25000, depositAmount: 50000, startDate: new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString(), endDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(), signedByOwner: true, signedByTenant: true, reviewLeft: false },
 ];
 
 export const mockVerifications: Verification[] = [
-    { id: 'ver1', tenantId: 'user-renter', status: VerificationStatus.NOT_SUBMITTED, formData: {}, submittedAt: '' }
+    { 
+        id: 'ver1', 
+        tenantId: 'user-renter', 
+        status: VerificationStatus.NOT_SUBMITTED, 
+        formData: {
+            fullName: '',
+            dateOfBirth: '',
+            fatherName: '',
+            permanentAddress: '',
+            previousAddress: '',
+            previousAddressDuration: '',
+            employerName: '',
+            employerAddress: '',
+            previousLandlordName: '',
+            previousLandlordContact: '',
+            reasonForMoving: '',
+            emergencyContactName: '',
+            emergencyContactRelation: '',
+            emergencyContactPhone: '',
+        }, 
+        submittedAt: '' 
+    }
 ];
 
 export const mockBills: Bill[] = [
@@ -346,6 +417,7 @@ export const mockPayments: Payment[] = [
     { id: 'pay8', userId: 'user-renter', propertyId: 'prop4', type: PaymentType.VIEWING_ADVANCE, amount: 500, paymentDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), status: 'Paid' },
     { id: 'pay9', userId: 'user-renter', propertyId: 'prop3', type: PaymentType.RENT, amount: 30000, paymentDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(), status: 'Paid' },
     { id: 'pay10', userId: 'user-renter', propertyId: 'prop3', type: PaymentType.BILL, amount: 2350, paymentDate: new Date(Date.now() - 85 * 24 * 60 * 60 * 1000).toISOString(), status: 'Paid' },
+    { id: 'pay11', userId: 'user-renter', propertyId: 'prop2', type: PaymentType.VIEWING_ADVANCE, amount: 500, paymentDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), status: 'Paid' },
 ];
 
 
@@ -378,8 +450,8 @@ export const mockActivityLogs: ActivityLog[] = [
     {
         id: 'log4',
         userId: 'user-renter',
-        type: ActivityType.CREATED_TASK,
-        message: 'Created a new task: "Fix leaking kitchen tap" for Sea View Apartment in Puri.',
+        type: ActivityType.CREATED_MAINTENANCE_REQUEST,
+        message: 'Created a new maintenance request: "Fix leaking kitchen tap" for Sea View Apartment in Puri.',
         timestamp: new Date().toISOString(),
     },
 ];
@@ -446,7 +518,7 @@ _________________________
 Tenant Signature
 `;
 
-export const mockTasks: Task[] = [
+export const mockMaintenanceRequests: MaintenanceRequest[] = [
     {
         id: 'task1',
         title: 'Fix leaking kitchen tap',
@@ -454,7 +526,12 @@ export const mockTasks: Task[] = [
         propertyId: 'prop3', // Sea View Apartment
         assignedToId: 'user-owner', // Assigned to owner
         createdBy: 'user-renter', // Created by renter
-        status: TaskStatus.TODO,
+        status: MaintenanceStatus.OPEN,
+        category: MaintenanceCategory.PLUMBING,
+        imageUrls: ['https://picsum.photos/seed/leak/400/300'],
+        comments: [
+            { userId: 'user-renter', text: 'I have placed a bucket underneath for now.', timestamp: new Date().toISOString() }
+        ],
         dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
         createdAt: new Date().toISOString(),
     },
@@ -465,7 +542,8 @@ export const mockTasks: Task[] = [
         propertyId: 'prop3',
         assignedToId: 'user-owner',
         createdBy: 'user-owner',
-        status: TaskStatus.IN_PROGRESS,
+        status: MaintenanceStatus.IN_PROGRESS,
+        category: MaintenanceCategory.GENERAL,
         dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     },
@@ -476,7 +554,8 @@ export const mockTasks: Task[] = [
         propertyId: 'prop6', // Fully Furnished 2BHK
         assignedToId: 'user-owner',
         createdBy: 'user-owner',
-        status: TaskStatus.DONE,
+        status: MaintenanceStatus.DONE,
+        category: MaintenanceCategory.GENERAL,
         dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
     },
@@ -487,7 +566,8 @@ export const mockTasks: Task[] = [
         propertyId: 'prop3',
         assignedToId: 'user-renter',
         createdBy: 'user-renter',
-        status: TaskStatus.TODO,
+        status: MaintenanceStatus.OPEN,
+        category: MaintenanceCategory.OTHER,
         dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // overdue
         createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     },

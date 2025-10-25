@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import type { Property } from '../types';
+import type { Property, PoliceVerificationFormData, User } from '../types';
 import { UploadIcon } from './Icons';
 
-interface BookViewingFormProps {
+interface ApplicationFormProps {
   property: Property;
-  onSubmit: (property: Property, details: { proposedDateTime: string; verificationData: any }) => void;
+  currentUser: User | null;
+  onSubmit: (property: Property, details: { proposedDateTime?: string; verificationData: any }) => void;
   onBack: () => void;
+  bookingType: 'viewing' | 'direct';
 }
 
 const timeSlots = [
@@ -27,54 +29,80 @@ const getNextSevenDays = () => {
     return days;
 };
 
-const BookViewingForm: React.FC<BookViewingFormProps> = ({ property, onSubmit, onBack }) => {
+const FormSection: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
+    <div className={`pt-6 mt-6 border-t first:mt-0 first:pt-0 first:border-t-0 ${className}`}>
+        <h4 className="text-lg font-semibold text-gray-800 mb-4">{title}</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {children}
+        </div>
+    </div>
+);
+
+const FormInput: React.FC<{ label: string; name: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; type?: string; placeholder?: string; required?: boolean }> = 
+({ label, name, value, onChange, type = 'text', placeholder, required = false }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
+        <input 
+            type={type} 
+            id={name} 
+            name={name} 
+            value={value} 
+            onChange={onChange} 
+            placeholder={placeholder}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+            required={required}
+        />
+    </div>
+);
+
+
+const ApplicationForm: React.FC<ApplicationFormProps> = ({ property, currentUser, onSubmit, onBack, bookingType }) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
-  const [verificationData, setVerificationData] = useState({
-      fullName: '',
-      employmentDetails: '',
-      idProof: null as File | null,
+  const [formData, setFormData] = useState<PoliceVerificationFormData>({
+    fullName: currentUser?.name || '',
+    dateOfBirth: '',
+    fatherName: '',
+    permanentAddress: '',
+    previousAddress: '',
+    previousAddressDuration: '',
+    employerName: '',
+    employerAddress: '',
+    previousLandlordName: '',
+    previousLandlordContact: '',
+    reasonForMoving: '',
+    emergencyContactName: '',
+    emergencyContactRelation: '',
+    emergencyContactPhone: '',
   });
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   
   const availableDays = getNextSevenDays();
+  const isViewingFlow = bookingType === 'viewing';
 
-  const handleVerificationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
-      setVerificationData(prev => ({ ...prev, [name]: value }));
-  };
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          setVerificationData(prev => ({ ...prev, idProof: e.target.files![0] }));
-      }
+      setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedTimeSlot) {
+    if (isViewingFlow && (!selectedDate || !selectedTimeSlot)) {
         setError('Please select both a date and a time slot for your viewing.');
         return;
     }
-    if (!verificationData.fullName || !verificationData.employmentDetails) {
-        setError('Please fill in all verification details.');
+     if (!consent) {
+        setError('You must agree to the declaration to proceed.');
         return;
     }
     setError('');
     
-    const startTime = selectedTimeSlot.split(' - ')[0];
-    const dateString = selectedDate.toISOString().split('T')[0];
-    const proposedDateTime = new Date(`${dateString} ${startTime}`).toISOString();
+    const proposedDateTime = isViewingFlow
+      ? new Date(`${selectedDate!.toISOString().split('T')[0]} ${selectedTimeSlot.split(' - ')[0]}`).toISOString()
+      : undefined;
     
-    const finalVerificationData = {
-        fullName: verificationData.fullName,
-        employmentDetails: verificationData.employmentDetails,
-        // In a real app, you would upload this file and get a URL.
-        // For this demo, we'll use a placeholder PDF URL for display.
-        idProofUrl: verificationData.idProof ? 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' : undefined,
-    };
-    
-    onSubmit(property, { proposedDateTime, verificationData: finalVerificationData });
+    onSubmit(property, { proposedDateTime, verificationData: formData });
   };
 
   const formatDate = (date: Date) => date.toLocaleDateString('en-US', { day: 'numeric' });
@@ -87,95 +115,120 @@ const BookViewingForm: React.FC<BookViewingFormProps> = ({ property, onSubmit, o
         </button>
         <div className="grid md:grid-cols-2 gap-8 md:gap-12">
             <div className="order-2 md:order-1">
-                <h2 className="text-3xl font-bold mb-2">Book a Visit & Verify</h2>
-                <p className="text-neutral-600 mb-6">Complete your verification and select a time to visit the property.</p>
+                <h2 className="text-3xl font-bold mb-2">{isViewingFlow ? 'Book a Visit & Verify' : 'Submit Rental Application'}</h2>
+                <p className="text-neutral-600 mb-6">{isViewingFlow ? 'Complete your verification and select a time to visit the property.' : 'Complete your verification to apply for this property directly.'}</p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-lg font-semibold text-gray-800 mb-3">1. Background Verification</label>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Full Name</label>
-                                <input type="text" id="fullName" name="fullName" value={verificationData.fullName} onChange={handleVerificationChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                            </div>
-                            <div>
-                                <label htmlFor="employmentDetails" className="block text-sm font-medium text-gray-700">Employment Details (e.g., Company, Role)</label>
-                                <input type="text" id="employmentDetails" name="employmentDetails" value={verificationData.employmentDetails} onChange={handleVerificationChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                            </div>
-                            <div>
-                                <label htmlFor="idProof" className="block text-sm font-medium text-gray-700">ID Proof (e.g., Aadhar, PAN)</label>
-                                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                                    <div className="space-y-1 text-center">
-                                        <UploadIcon className="mx-auto h-12 w-12 text-gray-400" />
-                                        <div className="flex text-sm text-gray-600">
-                                            <label htmlFor="idProof" className="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-secondary focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
-                                                <span>Upload a file</span>
-                                                <input id="idProof" name="idProof" type="file" className="sr-only" onChange={handleFileChange} />
-                                            </label>
-                                            <p className="pl-1">or drag and drop</p>
-                                        </div>
-                                        <p className="text-xs text-gray-500">{verificationData.idProof ? verificationData.idProof.name : 'PNG, JPG, PDF up to 2MB'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label className="block text-lg font-semibold text-gray-800 mb-3">2. Select a Date</label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {availableDays.map(day => {
-                                const isSelected = selectedDate?.toDateString() === day.toDateString();
-                                return (
-                                    <button
-                                        type="button"
-                                        key={day.toISOString()}
-                                        onClick={() => setSelectedDate(day)}
-                                        className={`p-3 text-center rounded-lg border-2 transition-colors ${
-                                            isSelected
-                                                ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary'
-                                                : 'bg-white text-neutral-700 border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <p className="font-bold text-lg">{formatDate(day)}</p>
-                                        <p className="text-xs">{formatDay(day)}</p>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <FormSection title="Personal Information">
+                        <FormInput label="Full Name" name="fullName" value={formData.fullName || ''} onChange={handleChange} required />
+                        <FormInput label="Father's Name" name="fatherName" value={formData.fatherName || ''} onChange={handleChange} required/>
+                        <FormInput label="Date of Birth" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleChange} type="date" required/>
+                    </FormSection>
 
-                    {selectedDate && (
-                    <div>
-                        <label className="block text-lg font-semibold text-gray-800 mb-3">3. Select a Time Slot</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {timeSlots.map(slot => (
-                                <button
-                                    type="button"
-                                    key={slot}
-                                    onClick={() => setSelectedTimeSlot(slot)}
-                                    className={`p-3 text-sm font-semibold rounded-md border-2 transition-colors ${
-                                        selectedTimeSlot === slot
-                                            ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary'
-                                            : 'bg-white text-neutral-700 border-gray-300 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    {slot}
-                                </button>
-                            ))}
+                    <FormSection title="Address History">
+                        <div className="md:col-span-2">
+                            <FormInput label="Permanent Address" name="permanentAddress" value={formData.permanentAddress || ''} onChange={handleChange} placeholder="As per your ID proof" required/>
                         </div>
-                    </div>
+                        <FormInput label="Previous Rented Address" name="previousAddress" value={formData.previousAddress || ''} onChange={handleChange} />
+                        <FormInput label="Duration of Stay (at previous address)" name="previousAddressDuration" value={formData.previousAddressDuration || ''} onChange={handleChange} placeholder="e.g., 2 years" />
+                    </FormSection>
+
+                    <FormSection title="Employment Verification">
+                        <FormInput label="Employer Name" name="employerName" value={formData.employerName || ''} onChange={handleChange} required/>
+                        <FormInput label="Employer Address" name="employerAddress" value={formData.employerAddress || ''} onChange={handleChange} required/>
+                    </FormSection>
+
+                    <FormSection title="Rental History">
+                        <FormInput label="Previous Landlord Name" name="previousLandlordName" value={formData.previousLandlordName || ''} onChange={handleChange} />
+                        <FormInput label="Previous Landlord Contact" name="previousLandlordContact" value={formData.previousLandlordContact || ''} onChange={handleChange} type="tel" />
+                        <div className="md:col-span-2">
+                            <FormInput label="Reason for Moving" name="reasonForMoving" value={formData.reasonForMoving || ''} onChange={handleChange} />
+                        </div>
+                    </FormSection>
+                    
+                    <FormSection title="Emergency Contact">
+                         <FormInput label="Contact Name" name="emergencyContactName" value={formData.emergencyContactName || ''} onChange={handleChange} required/>
+                         <FormInput label="Relation" name="emergencyContactRelation" value={formData.emergencyContactRelation || ''} onChange={handleChange} required/>
+                         <FormInput label="Phone Number" name="emergencyContactPhone" value={formData.emergencyContactPhone || ''} onChange={handleChange} type="tel" required/>
+                    </FormSection>
+                    
+                    {isViewingFlow && (
+                        <>
+                            <FormSection title="Select a Date">
+                                <div className="grid grid-cols-4 gap-2 md:col-span-2">
+                                    {availableDays.map(day => {
+                                        const isSelected = selectedDate?.toDateString() === day.toDateString();
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={day.toISOString()}
+                                                onClick={() => setSelectedDate(day)}
+                                                className={`p-3 text-center rounded-lg border-2 transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary'
+                                                        : 'bg-white text-neutral-700 border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <p className="font-bold text-lg">{formatDate(day)}</p>
+                                                <p className="text-xs">{formatDay(day)}</p>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </FormSection>
+
+                            {selectedDate && (
+                            <FormSection title="Select a Time Slot">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:col-span-2">
+                                    {timeSlots.map(slot => (
+                                        <button
+                                            type="button"
+                                            key={slot}
+                                            onClick={() => setSelectedTimeSlot(slot)}
+                                            className={`p-3 text-sm font-semibold rounded-md border-2 transition-colors ${
+                                                selectedTimeSlot === slot
+                                                    ? 'bg-primary/10 border-primary text-primary ring-2 ring-primary'
+                                                    : 'bg-white text-neutral-700 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {slot}
+                                        </button>
+                                    ))}
+                                </div>
+                            </FormSection>
+                            )}
+                        </>
                     )}
                     
                     {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
                     <div className="pt-6 border-t">
-                        <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 rounded-r-lg mb-4">
-                            <h4 className="font-bold">Refundable Advance Payment</h4>
-                            <p className="text-sm">A refundable advance of <span className="font-bold">₹{property.viewingAdvance.toLocaleString('en-IN')}</span> is required to book a viewing. This is refunded if the owner rejects your request or you mark yourself as not interested after a completed visit.</p>
+                         <div className="p-4 border border-gray-200 rounded-lg bg-neutral-50 mb-4">
+                            <label className="flex items-start space-x-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={consent}
+                                    onChange={(e) => setConsent(e.target.checked)}
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <span className="text-sm text-neutral-700">
+                                    I hereby declare that the information provided is true to the best of my knowledge and grant permission to the property owner to verify this information for the purpose of my rental application, including conducting credit and background checks as permitted by law.
+                                </span>
+                            </label>
                         </div>
-                        <button type="submit" className="w-full bg-secondary hover:bg-primary text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-neutral-300" disabled={!selectedDate || !selectedTimeSlot || !verificationData.fullName}>
-                            Pay ₹{property.viewingAdvance.toLocaleString('en-IN')} & Request Viewing
+                        {isViewingFlow ? (
+                             <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 rounded-r-lg mb-4">
+                                <h4 className="font-bold">Refundable Advance Payment</h4>
+                                <p className="text-sm">A refundable advance of <span className="font-bold">₹{property.viewingAdvance.toLocaleString('en-IN')}</span> is required to book a viewing. This is refunded if the owner rejects your request or you mark yourself as not interested after a completed visit.</p>
+                            </div>
+                        ) : (
+                             <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 rounded-r-lg mb-4">
+                                <h4 className="font-bold">Next Steps</h4>
+                                <p className="text-sm">After you submit your application, the owner will review it. If approved, you will be notified to proceed with the rental agreement.</p>
+                            </div>
+                        )}
+                        <button type="submit" className="w-full bg-secondary hover:bg-primary text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-neutral-300" disabled={(isViewingFlow && (!selectedDate || !selectedTimeSlot)) || !consent}>
+                            {isViewingFlow ? `Pay ₹${property.viewingAdvance.toLocaleString('en-IN')} & Request Viewing` : 'Submit Application'}
                         </button>
                     </div>
                 </form>
@@ -192,4 +245,4 @@ const BookViewingForm: React.FC<BookViewingFormProps> = ({ property, onSubmit, o
   );
 };
 
-export default BookViewingForm;
+export default ApplicationForm;

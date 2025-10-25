@@ -5,10 +5,10 @@ import { FurnishingStatus, Facing } from '../types';
 import MapComponent from './MapComponent';
 import * as L from 'leaflet';
 import AmenitiesSelector from './AmenitiesSelector';
-import { SparklesIcon } from './Icons';
+import { SparklesIcon, SearchIcon } from './Icons';
 
 interface PostPropertyFormProps {
-  onSubmit: (newPropertyData: Omit<Property, 'id' | 'images' | 'ownerId' | 'availability' | 'postedDate' | 'reviews' | 'nearbyPlaces'>) => void;
+  onSubmit: (newPropertyData: Omit<Property, 'id' | 'ownerId' | 'availability' | 'postedDate' | 'reviewIds' | 'images' | 'nearbyPlaces'>) => void;
   onCancel: () => void;
 }
 
@@ -23,6 +23,28 @@ const DepositButton: React.FC<{ label: string; isActive: boolean; onClick: () =>
         {label}
     </button>
 );
+
+const cityCoordinates: { [key: string]: [number, number] } = {
+    'bhubaneswar': [20.2961, 85.8245],
+    'cuttack': [20.4624, 85.8833],
+    'puri': [19.8135, 85.8312],
+    'sambalpur': [21.4705, 83.9701],
+    'rourkela': [22.2492, 84.8536],
+    'balasore': [21.4925, 86.9325],
+};
+
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+};
 
 
 const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel }) => {
@@ -53,6 +75,7 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
     ageOfProperty: 'New',
     viewingAdvance: 500,
     availableDate: today,
+    panoViewUrl: '',
   });
   
   const [furnishingItems, setFurnishingItems] = useState<FurnishingItem[]>([]);
@@ -60,6 +83,7 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [depositOption, setDepositOption] = useState<'1m' | '2m' | 'custom'>('custom');
+  const [locationSearch, setLocationSearch] = useState('');
 
   useEffect(() => {
     if (formData.rent > 0) {
@@ -103,13 +127,51 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
     handleChange(e);
   };
   
+  const updateAddressFromCoords = (coords: L.LatLng) => {
+    let closestCity = '';
+    let minDistance = Infinity;
+
+    for (const city in cityCoordinates) {
+        const [cityLat, cityLon] = cityCoordinates[city];
+        const distance = getDistance(coords.lat, coords.lng, cityLat, cityLon);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestCity = city;
+        }
+    }
+
+    const capitalizedCity = closestCity.charAt(0).toUpperCase() + closestCity.slice(1);
+    setFormData(prev => ({
+        ...prev,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        address: `Location near ${capitalizedCity}`
+    }));
+  };
+
   const handleMapClick = (coords: L.LatLng) => {
-    setFormData(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lng }));
+    updateAddressFromCoords(coords);
   };
 
   const handleMarkerDrag = (coords: L.LatLng) => {
-    setFormData(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lng }));
+    updateAddressFromCoords(coords);
   };
+
+  const handleLocationSearch = () => {
+    const searchTerm = locationSearch.toLowerCase().trim();
+    if (cityCoordinates[searchTerm]) {
+        const [lat, lon] = cityCoordinates[searchTerm];
+        setFormData(prev => ({
+            ...prev,
+            latitude: lat,
+            longitude: lon,
+            address: `${locationSearch.charAt(0).toUpperCase() + locationSearch.slice(1)}`
+        }));
+    } else {
+        alert('Location not found. Please try a major city like Bhubaneswar, Cuttack, etc.');
+    }
+  };
+
 
   const handleFurnishingChange = (itemName: string, quantity: number, icon: string) => {
     setFurnishingItems(prev => {
@@ -151,7 +213,7 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
     setIsGenerating(true);
     setErrors(prev => ({ ...prev, description: '' })); // Clear previous error
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
         const furnishingList = furnishingItems.map(item => `${item.quantity} ${item.name}`).join(', ');
         const amenitiesList = amenities.map(item => item.name).join(', ');
@@ -318,7 +380,22 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
 
         <div className="p-6 border border-gray-200 rounded-lg">
             <h3 className="text-xl font-semibold mb-4 text-neutral-800">6. Location</h3>
-            <p className="text-sm text-neutral-500 mb-4">Click on the map or drag the marker to set the property's precise location.</p>
+            <p className="text-sm text-neutral-500 mb-4">Search for a location, or click/drag the marker on the map to set the property's precise location.</p>
+            
+            <div className="flex gap-2 mb-4">
+                <input
+                    type="text"
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    placeholder="Search for a city..."
+                    className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                />
+                <button type="button" onClick={handleLocationSearch} className="px-4 py-2 bg-primary text-white font-semibold rounded-md flex items-center gap-2 hover:bg-secondary">
+                    <SearchIcon className="w-5 h-5"/>
+                    Search
+                </button>
+            </div>
+
             <div className="h-64 rounded-lg overflow-hidden">
                 <MapComponent
                     center={[formData.latitude, formData.longitude]}
@@ -340,10 +417,24 @@ const PostPropertyForm: React.FC<PostPropertyFormProps> = ({ onSubmit, onCancel 
             </div>
         </div>
 
-        <div>
-            <h4 className="block text-sm font-medium text-gray-700 mb-2">7. Images</h4>
-            <div className="p-6 text-center border-2 border-gray-300 border-dashed rounded-md">
-                <p className="text-sm text-neutral-500">A default image will be assigned. Image uploads are not available in this demo.</p>
+        <div className="p-6 border border-gray-200 rounded-lg">
+            <h3 className="text-xl font-semibold mb-4 text-neutral-800">7. Images & Virtual Tours</h3>
+            <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Images</label>
+                <div className="p-6 text-center border-2 border-gray-300 border-dashed rounded-md">
+                    <p className="text-sm text-neutral-500">A default image will be assigned. Image uploads are not available in this demo.</p>
+                </div>
+            </div>
+            <div>
+                 <FormInput 
+                    id="panoViewUrl" 
+                    name="panoViewUrl" 
+                    label="360° View URL" 
+                    type="url" 
+                    value={formData.panoViewUrl} 
+                    onChange={handleChange} 
+                    placeholder="e.g., https://kuula.co/share/..."
+                />
             </div>
         </div>
 

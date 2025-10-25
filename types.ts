@@ -22,6 +22,7 @@ export interface User {
   profilePictureUrl?: string;
   bio?: string;
   ownerCredit?: number;
+  notificationPreferences?: Partial<Record<NotificationType, boolean>>;
 }
 
 export enum FurnishingStatus {
@@ -54,12 +55,13 @@ export interface Amenity {
 
 export interface NearbyPlace {
     name: string;
-    type: 'School' | 'Hospital' | 'Restaurant' | 'Shopping' | 'Park' | 'IT Park';
+    type: 'School' | 'Hospital' | 'Restaurant' | 'Shopping' | 'Park' | 'IT Park' | 'Transport Hub';
     distance: string;
 }
 
 export interface Review {
     id: string;
+    userId: string;
     author: string;
     role: 'Owner' | 'Tenant';
     time: string;
@@ -97,8 +99,9 @@ export interface Property {
   ageOfProperty: string;
   furnishingItems: FurnishingItem[];
   nearbyPlaces: NearbyPlace[];
-  reviews: Review[];
+  reviewIds: string[];
   viewingAdvance: number;
+  panoViewUrl?: string;
 }
 
 export enum ApplicationStatus {
@@ -112,7 +115,8 @@ export enum ApplicationStatus {
   RENT_DUE = 'RENT_DUE',
   RENT_PAID = 'RENT_PAID',
   DEPOSIT_DUE = 'DEPOSIT_DUE',
-  MOVE_IN_READY = 'MOVE_IN_READY', // Deposit paid, keys can be handed over
+  DEPOSIT_PAID = 'DEPOSIT_PAID', // Tenant paid, owner needs to confirm
+  MOVE_IN_READY = 'MOVE_IN_READY', // Deposit paid & confirmed, keys can be handed over
   COMPLETED = 'COMPLETED', // Keys handed over, rental is active
 }
 
@@ -170,6 +174,7 @@ export enum ViewingStatus {
     DECLINED = 'DECLINED',
     COMPLETED = 'COMPLETED',
     CANCELLED = 'CANCELLED',
+    TENANT_REJECTED = 'TENANT_REJECTED',
 }
 
 export interface Viewing {
@@ -181,11 +186,8 @@ export interface Viewing {
     status: ViewingStatus;
     scheduledAt: string | null;
     requestedAt: string;
-    verificationData?: {
-        fullName: string;
-        employmentDetails: string;
-        idProofUrl?: string;
-    };
+    verificationData?: PoliceVerificationFormData;
+    paymentId?: string;
 }
 
 export interface Agreement {
@@ -196,9 +198,11 @@ export interface Agreement {
     rentAmount: number;
     depositAmount: number;
     startDate: string;
+    endDate: string;
     signedByTenant: boolean;
     signedByOwner: boolean;
     agreementUrl?: string;
+    reviewLeft?: boolean;
 }
 
 export enum VerificationStatus {
@@ -208,11 +212,29 @@ export enum VerificationStatus {
     REJECTED = 'REJECTED',
 }
 
+export interface PoliceVerificationFormData {
+  fullName?: string;
+  dateOfBirth?: string;
+  fatherName?: string;
+  permanentAddress?: string;
+  previousAddress?: string;
+  previousAddressDuration?: string;
+  employerName?: string;
+  employerAddress?: string;
+  previousLandlordName?: string;
+  previousLandlordContact?: string;
+  reasonForMoving?: string;
+  emergencyContactName?: string;
+  emergencyContactRelation?: string;
+  emergencyContactPhone?: string;
+}
+
+
 export interface Verification {
     id: string;
     tenantId: string;
     status: VerificationStatus;
-    formData: Record<string, any>;
+    formData: PoliceVerificationFormData;
     submittedAt: string;
 }
 
@@ -254,12 +276,14 @@ export enum ActivityType {
     SUBMITTED_APPLICATION = 'SUBMITTED_APPLICATION',
     APPROVED_APPLICATION = 'APPROVED_APPLICATION',
     PAID_BILL = 'PAID_BILL',
+    GENERATED_BILL = 'GENERATED_BILL',
     PAID_RENT = 'PAID_RENT',
     SIGNED_AGREEMENT = 'SIGNED_AGREEMENT',
     RAISED_DISPUTE = 'RAISED_DISPUTE',
     AGREEMENT_ACTION_REQUIRED = 'AGREEMENT_ACTION_REQUIRED',
-    CREATED_TASK = 'CREATED_TASK',
-    COMPLETED_TASK = 'COMPLETED_TASK',
+    CREATED_MAINTENANCE_REQUEST = 'CREATED_MAINTENANCE_REQUEST',
+    COMPLETED_MAINTENANCE_REQUEST = 'COMPLETED_MAINTENANCE_REQUEST',
+    LEFT_REVIEW = 'LEFT_REVIEW',
 }
 
 export interface ActivityLog {
@@ -282,8 +306,11 @@ export enum NotificationType {
     OFFLINE_PAYMENT_CONFIRMED = 'OFFLINE_PAYMENT_CONFIRMED',
     DEPOSIT_PAYMENT_DUE = 'DEPOSIT_PAYMENT_DUE',
     KEYS_HANDOVER_READY = 'KEYS_HANDOVER_READY',
-    NEW_TASK_ASSIGNED = 'NEW_TASK_ASSIGNED',
-    TASK_STATUS_UPDATE = 'TASK_STATUS_UPDATE',
+    NEW_MAINTENANCE_REQUEST = 'NEW_MAINTENANCE_REQUEST',
+    MAINTENANCE_STATUS_UPDATE = 'MAINTENANCE_STATUS_UPDATE',
+    NEW_BILL_GENERATED = 'NEW_BILL_GENERATED',
+    REFUND_INITIATED = 'REFUND_INITIATED',
+    NEW_REVIEW_RECEIVED = 'NEW_REVIEW_RECEIVED',
 }
 
 export interface Notification {
@@ -296,23 +323,36 @@ export interface Notification {
     relatedId: string; // propertyId, viewingId, etc.
 }
 
-export enum TaskStatus {
-    TODO = 'To Do',
+export enum MaintenanceStatus {
+    OPEN = 'Open',
     IN_PROGRESS = 'In Progress',
     DONE = 'Done',
 }
 
-export interface Task {
+export enum MaintenanceCategory {
+    PLUMBING = 'Plumbing',
+    ELECTRICAL = 'Electrical',
+    APPLIANCE = 'Appliance Repair',
+    GENERAL = 'General Maintenance',
+    CLEANING = 'Cleaning',
+    OTHER = 'Other',
+}
+
+export interface MaintenanceRequest {
     id: string;
     title: string;
     description: string;
     propertyId: string;
     assignedToId: string; // userId of renter or owner
     createdBy: string; // userId
-    status: TaskStatus;
+    status: MaintenanceStatus;
+    category: MaintenanceCategory;
+    imageUrls?: string[];
+    comments?: { userId: string, text: string, timestamp: string }[];
     dueDate: string;
     createdAt: string;
 }
+
 
 export interface AiFilters {
     rent_max?: number;

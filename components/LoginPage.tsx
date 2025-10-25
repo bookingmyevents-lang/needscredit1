@@ -143,7 +143,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ users, onLogin, onBackToHome, onS
 
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex">
+    <div className="h-[calc(100vh-4rem)] flex">
         <div className="relative hidden lg:block w-1/2 bg-cover bg-center" style={{backgroundImage: "url('https://picsum.photos/seed/loginpage/1200/1200')"}}>
             <div className="absolute inset-0 bg-primary opacity-80"></div>
             <div className="relative h-full flex flex-col justify-between p-12 text-white">

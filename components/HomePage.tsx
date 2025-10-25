@@ -26,18 +26,18 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
   };
 
   const featuredProperties = properties.filter(p => p.availability === 'available').slice(0, 3);
-  const popularLocalities = ['Patia', 'Saheed Nagar', 'Nayapalli', 'Chandrasekharpur'];
+  const popularLocalities = ['Bhubaneswar', 'Cuttack', 'Puri', 'Sambalpur', 'Rourkela', 'Balasore'];
 
   return (
-    <div>
+    <div className="bg-neutral-50">
       {/* Hero Section */}
-      <div className="relative h-[65vh] min-h-[500px] bg-cover bg-center flex items-center justify-center text-white" style={{ backgroundImage: "url('https://picsum.photos/seed/hero/1920/1080')" }}>
-        <div className="absolute inset-0 bg-primary opacity-60"></div>
+      <div className="relative h-[calc(100vh-4rem)] min-h-[600px] bg-cover bg-center flex items-center justify-center text-white" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1616046229478-9901c5536a45?q=80&w=2070&auto=format&fit=crop')" }}>
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-secondary/40"></div>
         <div className="relative z-10 text-center p-4">
-          <h1 className="text-4xl md:text-6xl font-bold mb-2">Property for rent. Simplified.</h1>
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-2 text-shadow-lg">Property for rent. Simplified.</h1>
           <p className="text-lg md:text-xl text-neutral-200 mb-8">Discover verified properties from trusted owners across {cityName}.</p>
           
-          <form onSubmit={handleSearchSubmit} className="max-w-3xl mx-auto bg-white rounded-lg p-2 flex items-center shadow-lg">
+          <form onSubmit={handleSearchSubmit} className="max-w-3xl mx-auto bg-white rounded-lg p-2 flex items-center shadow-2xl">
              <div className="flex items-center pl-4 pr-2">
                 <p className="text-sm font-semibold text-neutral-800">Rent</p>
             </div>
@@ -93,28 +93,36 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
       </div>
 
       {/* Services Section */}
-      <div className="bg-white py-20">
+      <div className="bg-white py-24">
         <div className="container mx-auto px-4 md:px-8 text-center">
-            <h2 className="text-3xl font-bold text-neutral-900 mb-4">Everything you need. All in one place.</h2>
-            <p className="text-neutral-600 mb-12 max-w-2xl mx-auto">From finding the perfect home to paying your rent, we've got you covered with a seamless and secure experience.</p>
+            <h2 className="text-4xl font-bold text-neutral-900 mb-4">Everything you need. All in one place.</h2>
+            <p className="text-lg text-neutral-600 mb-16 max-w-3xl mx-auto">From finding the perfect home to paying your rent, we've got you covered with a seamless and secure experience.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                <div className="flex flex-col items-center p-6 bg-neutral-50 rounded-lg border">
-                    <div className="bg-primary/10 text-primary rounded-full p-4 mb-4"><ShieldCheckIcon className="w-8 h-8"/></div>
+                <div className="text-center p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white rounded-2xl">
+                    <div className="inline-block bg-gradient-to-br from-primary/10 to-secondary/10 text-primary rounded-full p-5 mb-4 ring-8 ring-primary/5">
+                        <ShieldCheckIcon className="w-10 h-10"/>
+                    </div>
                     <h3 className="text-xl font-bold mb-2">Verified Properties</h3>
                     <p className="text-neutral-600 text-sm">Rest easy with our curated list of verified properties and owners.</p>
                 </div>
-                 <div className="flex flex-col items-center p-6 bg-neutral-50 rounded-lg border">
-                    <div className="bg-primary/10 text-primary rounded-full p-4 mb-4"><PencilIcon className="w-8 h-8"/></div>
+                 <div className="text-center p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white rounded-2xl">
+                    <div className="inline-block bg-gradient-to-br from-primary/10 to-secondary/10 text-primary rounded-full p-5 mb-4 ring-8 ring-primary/5">
+                        <PencilIcon className="w-10 h-10"/>
+                    </div>
                     <h3 className="text-xl font-bold mb-2">Digital Agreements</h3>
                     <p className="text-neutral-600 text-sm">Sign your rental agreements online. It's fast, secure, and paperless.</p>
                 </div>
-                <div className="flex flex-col items-center p-6 bg-neutral-50 rounded-lg border">
-                    <div className="bg-primary/10 text-primary rounded-full p-4 mb-4"><CreditCardIcon className="w-8 h-8"/></div>
+                <div className="text-center p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white rounded-2xl">
+                    <div className="inline-block bg-gradient-to-br from-primary/10 to-secondary/10 text-primary rounded-full p-5 mb-4 ring-8 ring-primary/5">
+                        <CreditCardIcon className="w-10 h-10"/>
+                    </div>
                     <h3 className="text-xl font-bold mb-2">Online Rent Payments</h3>
                     <p className="text-neutral-600 text-sm">Pay your rent on time, every time, with automated reminders and multiple payment options.</p>
                 </div>
-                <div className="flex flex-col items-center p-6 bg-neutral-50 rounded-lg border">
-                    <div className="bg-primary/10 text-primary rounded-full p-4 mb-4"><UserGroupIcon className="w-8 h-8"/></div>
+                <div className="text-center p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white rounded-2xl">
+                    <div className="inline-block bg-gradient-to-br from-primary/10 to-secondary/10 text-primary rounded-full p-5 mb-4 ring-8 ring-primary/5">
+                        <UserGroupIcon className="w-10 h-10"/>
+                    </div>
                     <h3 className="text-xl font-bold mb-2">Dedicated Support</h3>
                     <p className="text-neutral-600 text-sm">Our team is here to help with any issues, from disputes to support queries.</p>
                 </div>
@@ -123,12 +131,12 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
       </div>
 
       {/* Popular Localities Section */}
-      <div className="bg-neutral-50 py-20">
+      <div className="bg-neutral-50 py-24">
         <div className="container mx-auto px-4 md:px-8">
-          <h2 className="text-3xl font-bold text-neutral-900 mb-8 text-center">Explore popular localities in {cityName}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <h2 className="text-4xl font-bold text-neutral-900 mb-12 text-center">Explore popular cities &amp; districts in {cityName}</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
             {popularLocalities.map(loc => (
-                <a href="#" key={loc} onClick={(e) => handleLocationClick(e, loc)} className="block p-6 bg-white rounded-lg border shadow-sm hover:shadow-lg hover:border-primary transition-all group">
+                <a href="#" key={loc} onClick={(e) => handleLocationClick(e, loc)} className="block p-6 bg-white rounded-xl border shadow-sm hover:shadow-lg hover:border-primary transition-all group hover:scale-105">
                     <h3 className="font-bold text-lg text-neutral-800">{loc}</h3>
                     <p className="text-sm text-primary font-semibold mt-2 group-hover:underline">View Properties &rarr;</p>
                 </a>
@@ -139,15 +147,15 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
       
       {/* Featured Properties Section */}
       {featuredProperties.length > 0 && (
-        <div className="bg-white py-20">
+        <div className="bg-white py-24">
           <div className="container mx-auto px-4 md:px-8">
-            <h2 className="text-3xl font-bold text-neutral-900 mb-8 text-center">Featured Properties</h2>
+            <h2 className="text-4xl font-bold text-neutral-900 mb-12 text-center">Featured Properties</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {featuredProperties.map(property => (
-                <PropertyCard key={property.id} property={property} onSelectProperty={onSelectProperty} />
+                <PropertyCard key={property.id} property={property} onSelectProperty={onSelectProperty} isSaved={false} onToggleSave={() => onLoginClick()} currentUser={null} />
               ))}
             </div>
-            <div className="text-center mt-12">
+            <div className="text-center mt-16">
                   <button onClick={() => onSearch('')} className="px-8 py-3 bg-primary hover:bg-secondary text-white font-bold rounded-lg transition-colors duration-300">
                       View All Properties
                   </button>
@@ -157,18 +165,25 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
       )}
 
       {/* For Owners CTA Section */}
-      <div className="bg-secondary/10 py-20">
-        <div className="container mx-auto px-4 md:px-8 text-center">
-            <h2 className="text-3xl font-bold text-neutral-900 mb-4">List your property on RentEase</h2>
-            <p className="text-neutral-600 mb-12 max-w-2xl mx-auto">Join thousands of owners who trust us to find the right tenants for their properties. Our platform makes management simple and secure.</p>
-            <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-12 text-neutral-700">
-                <div className="flex items-center gap-2"><CheckCircleIcon className="w-5 h-5 text-green-500" /> Verified Tenant Profiles</div>
-                <div className="flex items-center gap-2"><CheckCircleIcon className="w-5 h-5 text-green-500" /> Easy Listing Management</div>
-                <div className="flex items-center gap-2"><CheckCircleIcon className="w-5 h-5 text-green-500" /> Secure Online Payments</div>
+      <div className="py-24 bg-white">
+        <div className="container mx-auto px-4 md:px-8">
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 items-center">
+                <div className="p-8 md:p-12">
+                    <h2 className="text-4xl font-bold text-neutral-900 mb-4">Become a RentEase Host</h2>
+                    <p className="text-neutral-600 mb-8 max-w-2xl">Join thousands of owners who trust us to find the right tenants. Our platform makes management simple and secure.</p>
+                    <ul className="space-y-4 mb-10 text-neutral-700">
+                        <li className="flex items-center gap-3"><CheckCircleIcon className="w-6 h-6 text-green-500" /> Verified Tenant Profiles</li>
+                        <li className="flex items-center gap-3"><CheckCircleIcon className="w-6 h-6 text-green-500" /> Easy Listing Management</li>
+                        <li className="flex items-center gap-3"><CheckCircleIcon className="w-6 h-6 text-green-500" /> Secure Online Payments</li>
+                    </ul>
+                    <button onClick={onLoginClick} className="px-8 py-3 bg-secondary hover:bg-primary text-white font-bold rounded-lg transition-colors duration-300 text-lg">
+                        List Your Property Now
+                    </button>
+                </div>
+                <div className="h-64 md:h-full">
+                    <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=2070&auto=format&fit=crop" alt="Modern living room" className="w-full h-full object-cover" />
+                </div>
             </div>
-            <button onClick={onLoginClick} className="px-8 py-3 bg-secondary hover:bg-primary text-white font-bold rounded-lg transition-colors duration-300">
-                List Your Property Now
-            </button>
         </div>
       </div>
 

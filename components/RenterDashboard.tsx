@@ -1,9 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, Task } from '../types';
-import { BillType, ApplicationStatus, PaymentType, ViewingStatus, TaskStatus } from '../types';
+import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, MaintenanceRequest, Review } from '../types';
+import { BillType, ApplicationStatus, PaymentType, ViewingStatus, MaintenanceStatus, VerificationStatus, UserRole } from '../types';
 import * as Icons from './Icons';
-import VerificationForm from './VerificationForm';
+import PoliceVerificationForm from './VerificationForm';
+import CreateMaintenanceRequestModal from './CreateMaintenanceRequestModal';
+import MaintenanceRequestCard from './MaintenanceRequestCard';
+import PropertyCard from './PropertyCard';
+import OnboardingTracker from './OnboardingTracker';
+import LeaveReviewModal from './LeaveReviewModal';
+import RentCycleTracker from './RentCycleTracker';
 
+
+// Component-specific props
 interface RenterDashboardProps {
   user: User;
   agreements: { agreement: Agreement, property: Property }[];
@@ -13,8 +21,9 @@ interface RenterDashboardProps {
   properties: Property[];
   bills: Bill[];
   verification: Verification;
-  tasks: Task[];
+  maintenanceRequests: MaintenanceRequest[];
   users: User[];
+  savedProperties: Property[];
   activeTab: string;
   onTabChange: (tab: string) => void;
   onSubmitVerification: (formData: Record<string, any>) => void;
@@ -25,9 +34,100 @@ interface RenterDashboardProps {
   onInitiatePaymentFlow: (application: Application, property: Property) => void;
   onConfirmRent: (viewingId: string) => void;
   onCancelViewing: (viewingId: string) => void;
-  onAddTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'status' | 'createdBy'>) => void;
-  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  onTenantReject: (viewingId: string) => void;
+  onAddMaintenanceRequest: (requestData: Omit<MaintenanceRequest, 'id' | 'createdAt' | 'status' | 'createdBy'>) => void;
+  onUpdateMaintenanceStatus: (requestId: string, status: MaintenanceStatus) => void;
+  onAddMaintenanceComment: (requestId: string, commentText: string) => void;
+  onToggleSaveProperty: (propertyId: string) => void;
+  onSelectProperty: (property: Property) => void;
+  onBrowseClick: () => void;
+  recentlyPaidApplicationId: string | null;
+  onClearRecentlyPaid: () => void;
+  onLeaveReview: (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => void;
 }
+
+interface WelcomeHomeMessageProps {
+  userName: string;
+  onManageClick: () => void;
+}
+
+const WelcomeHomeMessage: React.FC<WelcomeHomeMessageProps> = ({ userName, onManageClick }) => {
+  // Array to render multiple confetti pieces
+  const confettiPieces = Array.from({ length: 20 });
+
+  return (
+    <div className="welcome-home-container">
+      {/* Confetti pieces */}
+      {confettiPieces.map((_, i) => (
+        <div key={i} className={`confetti confetti-piece-${i}`}></div>
+      ))}
+      <div className="welcome-home-card">
+        <div className="relative inline-block">
+          <Icons.HomeIcon className="w-20 h-20 text-primary opacity-20" />
+          <Icons.CheckCircleIcon className="w-16 h-16 text-green-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        </div>
+        <h2>Welcome Home, {userName}!</h2>
+        <p>Congratulations! Your rental process is complete. We wish you all the best in your new home.</p>
+        <button onClick={onManageClick}>Manage Your Tenancy</button>
+      </div>
+    </div>
+  );
+};
+
+const PaymentSuccessMessage: React.FC<{
+  size?: 'large' | 'small';
+  onComplete: () => void;
+  message?: string;
+}> = ({ size = 'large', onComplete, message }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onComplete();
+    }, 3500); // Animation duration + a little extra
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  if (size === 'small') {
+    return (
+      <div className="payment-success-inline">
+        <svg className="animation-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+          <circle className="payment-success-circle" cx="26" cy="26" r="25" fill="none" />
+          <path className="payment-success-checkmark" fill="none" d="M14,27 L22,35 L38,18" />
+        </svg>
+        <span>{message || 'Payment Successful!'}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="payment-success-container">
+      <div className="payment-success-animation">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+          <circle className="payment-success-circle" cx="26" cy="26" r="25" fill="none" />
+          <path className="payment-success-checkmark" fill="none" d="M14,27 L22,35 L38,18" />
+        </svg>
+      </div>
+      <h3>{message || 'Payment Successful!'}</h3>
+    </div>
+  );
+};
+
+
+// Reusable components within the dashboard
+const SidebarButton: React.FC<{ id: string; label: string; count?: number; icon: React.ReactNode; activeTab: string; onTabChange: (tab: string) => void }> = ({ id, label, count, icon, activeTab, onTabChange }) => (
+    <button
+        onClick={() => onTabChange(id)}
+        className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-lg transition-colors ${
+            activeTab === id 
+            ? 'bg-primary/10 text-primary' 
+            : 'text-neutral-600 hover:bg-neutral-100'
+        }`}
+    >
+        {icon}
+        <span className="flex-grow text-left">{label}</span>
+        {typeof count !== 'undefined' && count > 0 && 
+            <span className="bg-primary/20 text-primary text-xs font-bold rounded-full px-2 py-0.5">{count}</span>}
+    </button>
+);
 
 const KycStatusBadge: React.FC<{ status: 'Verified' | 'Pending' | 'Rejected' | 'Not Verified', large?: boolean }> = ({ status, large = false }) => {
     const statusInfo = {
@@ -36,22 +136,13 @@ const KycStatusBadge: React.FC<{ status: 'Verified' | 'Pending' | 'Rejected' | '
         Rejected: { text: 'KYC Rejected', color: 'bg-red-100 text-red-800', icon: <Icons.XCircleIcon className="w-4 h-4" /> },
         'Not Verified': { text: 'Not Verified', color: 'bg-gray-100 text-gray-800', icon: <Icons.ExclamationTriangleIcon className="w-4 h-4" /> },
     }[status];
-
     const sizeClass = large ? 'px-3 py-1.5 text-base' : 'px-2.5 py-1 text-xs';
-
-    return (
-        <span className={`inline-flex items-center gap-1.5 font-semibold rounded-full ${sizeClass} ${statusInfo.color}`}>
-            {statusInfo.icon}
-            {statusInfo.text}
-        </span>
-    );
+    return <span className={`inline-flex items-center gap-1.5 font-semibold rounded-full ${sizeClass} ${statusInfo.color}`}>{statusInfo.icon}{statusInfo.text}</span>;
 };
 
 const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: React.ReactNode, color: string }> = ({ icon, title, value, color }) => (
     <div className="bg-white p-6 rounded-lg shadow-md border flex items-start gap-4">
-        <div className={`p-3 rounded-full ${color}`}>
-            {icon}
-        </div>
+        <div className={`p-3 rounded-full ${color}`}>{icon}</div>
         <div>
             {typeof value === 'string' || typeof value === 'number' ? <p className="text-3xl font-bold text-neutral-800">{value}</p> : value}
             <h4 className="text-sm font-medium text-neutral-500">{title}</h4>
@@ -59,645 +150,631 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: React.Re
     </div>
 );
 
-const getDueDateInfo = (dueDate: string): { text: string; color: string } => {
-    const due = new Date(dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
+// Main Component
+const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
+    const { user, agreements, viewings, applications, payments, properties, bills, verification, maintenanceRequests, users, savedProperties, activeTab, onTabChange, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onTenantReject, onAddMaintenanceRequest, onUpdateMaintenanceStatus, onAddMaintenanceComment, onToggleSaveProperty, onSelectProperty, onBrowseClick, recentlyPaidApplicationId, onClearRecentlyPaid, onLeaveReview } = props;
 
-    const diffTime = due.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)} day(s)`, color: 'bg-red-100 text-red-800' };
-    if (diffDays === 0) return { text: 'Due Today', color: 'bg-red-100 text-red-800' };
-    if (diffDays === 1) return { text: 'Due Tomorrow', color: 'bg-orange-100 text-orange-800' };
-    if (diffDays <= 7) return { text: `Due in ${diffDays} days`, color: 'bg-yellow-100 text-yellow-800' };
-    return { text: `Due ${due.toLocaleDateString()}`, color: 'bg-gray-100 text-gray-800' };
-};
-
-const TaskCard: React.FC<{ task: Task, users: User[], onUpdateStatus: (taskId: string, status: TaskStatus) => void, properties: Property[] }> = ({ task, users, onUpdateStatus, properties }) => {
-    const assignedTo = users.find(u => u.id === task.assignedToId);
-    const createdBy = users.find(u => u.id === task.createdBy);
-    const property = properties.find(p => p.id === task.propertyId);
-    const dueDateInfo = getDueDateInfo(task.dueDate);
-
-    return (
-        <div className="p-4 border rounded-lg bg-white shadow-sm">
-            <div className="flex justify-between items-start gap-4">
-                <h4 className="font-bold text-lg text-neutral-800">{task.title}</h4>
-                {task.status !== TaskStatus.DONE && (
-                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${dueDateInfo.color}`}>{dueDateInfo.text}</span>
-                )}
-            </div>
-            {task.description && <p className="text-sm text-neutral-600 mt-1">{task.description}</p>}
-            
-            <div className="mt-4 pt-4 border-t flex flex-wrap justify-between items-center gap-4">
-                <div className="flex items-center gap-2 text-sm">
-                    <strong className="font-semibold text-neutral-600">Property:</strong>
-                    <span className="text-neutral-500">{property?.title || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <label htmlFor={`status-${task.id}`} className="text-sm font-medium">Status:</label>
-                    <select
-                        id={`status-${task.id}`}
-                        value={task.status}
-                        onChange={(e) => onUpdateStatus(task.id, e.target.value as TaskStatus)}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm py-1"
-                    >
-                        {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-sm">
-                 <div className="flex items-center gap-2">
-                    {assignedTo?.profilePictureUrl ? (
-                        <img src={assignedTo.profilePictureUrl} alt={assignedTo.name} className="w-8 h-8 rounded-full object-cover" />
-                    ) : (
-                        <Icons.UserCircleIcon className="w-8 h-8 text-neutral-400" />
-                    )}
-                    <div>
-                        <p className="text-xs text-neutral-500">Assigned To</p>
-                        <p className="font-semibold text-neutral-700">{assignedTo?.name || 'Unassigned'}</p>
-                    </div>
-                </div>
-                 <div className="flex items-center gap-2">
-                    {createdBy?.profilePictureUrl ? (
-                        <img src={createdBy.profilePictureUrl} alt={createdBy.name} className="w-8 h-8 rounded-full object-cover" />
-                    ) : (
-                        <Icons.UserCircleIcon className="w-8 h-8 text-neutral-400" />
-                    )}
-                    <div>
-                        <p className="text-xs text-neutral-500">Created By</p>
-                        <p className="font-semibold text-neutral-700">{createdBy?.name || 'Unknown'}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const CreateTaskModal: React.FC<{
-    onClose: () => void;
-    onSubmit: (taskData: Omit<Task, 'id' | 'createdAt' | 'status' | 'createdBy'>) => void;
-    properties: Property[];
-    users: User[];
-}> = ({ onClose, onSubmit, properties, users }) => {
-    const [taskData, setTaskData] = useState({
-        title: '',
-        description: '',
-        propertyId: '',
-        assignedToId: '',
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
-    });
-    const [error, setError] = useState('');
-    const today = new Date().toISOString().split('T')[0];
-
-    useEffect(() => {
-        if (!taskData.assignedToId && users.length > 0) {
-            setTaskData(prev => ({ ...prev, assignedToId: users[0].id }));
-        }
-        if (!taskData.propertyId && properties.length > 0) {
-            setTaskData(prev => ({ ...prev, propertyId: properties[0].id }));
-        }
-    }, [users, properties, taskData.assignedToId, taskData.propertyId]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        setTaskData({ ...taskData, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        if (!taskData.title || !taskData.propertyId || !taskData.assignedToId || !taskData.dueDate) {
-            setError('Please fill out all required fields.');
-            return;
-        }
-        if (properties.length === 0) {
-            setError('You must be associated with a property to create a task.');
-            return;
-        }
-        onSubmit(taskData);
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="max-w-lg w-full bg-white p-8 rounded-lg shadow-xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                    <Icons.XCircleIcon className="w-6 h-6" />
-                </button>
-                <h2 className="text-2xl font-bold mb-6">Create New Task</h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Title</label>
-                        <input type="text" name="title" id="title" placeholder="e.g., Fix leaking kitchen tap" value={taskData.title} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                    </div>
-                    <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description (Optional)</label>
-                        <textarea name="description" id="description" value={taskData.description} onChange={handleChange} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"></textarea>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="propertyId" className="block text-sm font-medium text-gray-700">Property</label>
-                            <select name="propertyId" id="propertyId" value={taskData.propertyId} onChange={handleChange} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" required disabled={properties.length === 0}>
-                                {properties.length > 0 ? properties.map(p => <option key={p.id} value={p.id}>{p.title}</option>) : <option>No properties available</option>}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="assignedToId" className="block text-sm font-medium text-gray-700">Assign To</label>
-                            <select name="assignedToId" id="assignedToId" value={taskData.assignedToId} onChange={handleChange} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" required>
-                                {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role === 'OWNER' ? 'Owner' : 'Me'})</option>)}
-                            </select>
-                        </div>
-                    </div>
-                     <div>
-                        <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">Due Date</label>
-                        <input type="date" name="dueDate" id="dueDate" value={taskData.dueDate} onChange={handleChange} min={today} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                    </div>
-                    {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={onClose} className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-sm">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-secondary hover:bg-primary text-white font-semibold rounded-md text-sm">Create Task</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const RenterDashboard: React.FC<RenterDashboardProps> = ({ user, agreements, viewings, applications, payments, properties, bills, verification, tasks, users, activeTab, onTabChange, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onAddTask, onUpdateTaskStatus }) => {
+    // ... State and Memos ...
     const [paymentFilterType, setPaymentFilterType] = useState('');
     const [paymentFilterStatus, setPaymentFilterStatus] = useState('');
     const [paymentFilterStartDate, setPaymentFilterStartDate] = useState('');
     const [paymentFilterEndDate, setPaymentFilterEndDate] = useState('');
-    
-    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
-    const [taskSortBy, setTaskSortBy] = useState('dueDate-asc');
-    const [taskFilterStatus, setTaskFilterStatus] = useState<TaskStatus | 'All'>('All');
-    const [taskFilterProperty, setTaskFilterProperty] = useState<string>('All');
-    const [taskFilterAssignee, setTaskFilterAssignee] = useState<string>('All');
-    
-    const rentDues = applications.filter(a => a.application.status === ApplicationStatus.RENT_DUE);
-    const depositDues = applications.filter(a => a.application.status === ApplicationStatus.DEPOSIT_DUE);
-    const offlinePending = applications.filter(a => a.application.status === ApplicationStatus.OFFLINE_PAYMENT_PENDING);
-    const unpaidBills = bills.filter(b => !b.isPaid);
+    const [billFilter, setBillFilter] = useState<'all' | 'utilities' | 'rent'>('all');
+    const [isCreateRequestModalOpen, setIsCreateRequestModalOpen] = useState(false);
+    const [requestSortBy, setRequestSortBy] = useState('dueDate-asc');
+    const [requestFilterStatus, setRequestFilterStatus] = useState<MaintenanceStatus | 'All'>('All');
+    const [requestFilterProperty, setRequestFilterProperty] = useState<string>('All');
+    const [requestFilterAssignee, setRequestFilterAssignee] = useState<string>('All');
+    const [reviewingAgreement, setReviewingAgreement] = useState<{ agreement: Agreement, property: Property } | null>(null);
+
     const pendingAgreementSignatures = agreements.filter(a => a.agreement.signedByOwner && !a.agreement.signedByTenant).length;
     const sortedPayments = [...payments].sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
 
-    const filteredPayments = useMemo(() => {
-        return sortedPayments.filter(payment => {
-            if (paymentFilterType && payment.type !== paymentFilterType) return false;
-            if (paymentFilterStatus && payment.status !== paymentFilterStatus) return false;
-            
-            const paymentDate = new Date(payment.paymentDate);
-            if (paymentFilterStartDate && paymentDate < new Date(paymentFilterStartDate)) return false;
-            if (paymentFilterEndDate) {
-                const endDate = new Date(paymentFilterEndDate);
-                endDate.setHours(23, 59, 59, 999);
-                if (paymentDate > endDate) return false;
-            }
-            
-            return true;
-        });
-    }, [sortedPayments, paymentFilterType, paymentFilterStatus, paymentFilterStartDate, paymentFilterEndDate]);
-
-    const clearPaymentFilters = () => {
-        setPaymentFilterType('');
-        setPaymentFilterStatus('');
-        setPaymentFilterStartDate('');
-        setPaymentFilterEndDate('');
-    };
-
-    const paymentItems = [
-        ...unpaidBills.map(bill => ({ type: 'bill' as const, data: bill, dueDate: new Date(bill.dueDate) })),
-        ...rentDues.map(({ application, property }) => ({ type: 'rent' as const, data: { application, property }, dueDate: new Date(application.dueDate!) })),
-        ...depositDues.map(({ application, property }) => ({ type: 'deposit' as const, data: { application, property }, dueDate: new Date() })),
-        ...offlinePending.map(({ application, property }) => ({ type: 'offline' as const, data: { application, property }, dueDate: new Date(application.dueDate!) }))
-    ].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-
-
-    const TabButton = ({ id, label, count }: { id: string, label: string, count?: number }) => (
-        <button
-            onClick={() => onTabChange(id)}
-            className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors flex items-center gap-2 ${activeTab === id ? 'border-primary text-primary' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
-        >
-            {label} {typeof count !== 'undefined' && count > 0 && <span className="bg-primary/10 text-primary text-xs font-bold rounded-full px-2 py-0.5">{count}</span>}
-        </button>
-    );
-
-    const getViewingStatusInfo = (status: ViewingStatus) => {
-        const statuses: Record<ViewingStatus, {text: string; color: string; bgColor: string, icon: React.ReactNode}> = {
-            [ViewingStatus.REQUESTED]: { text: 'Pending Owner Verification', color: 'text-yellow-800', bgColor: 'bg-yellow-100', icon: <Icons.ClockIcon className="w-4 h-4"/> },
-            [ViewingStatus.ACCEPTED]: { text: 'Visit Approved', color: 'text-green-800', bgColor: 'bg-green-100', icon: <Icons.CheckCircleIcon className="w-4 h-4"/> },
-            [ViewingStatus.DECLINED]: { text: 'Rejected (Refunded)', color: 'text-red-800', bgColor: 'bg-red-100', icon: <Icons.XCircleIcon className="w-4 h-4"/> },
-            [ViewingStatus.COMPLETED]: { text: 'Visited', color: 'text-blue-800', bgColor: 'bg-blue-100', icon: <Icons.HomeIcon className="w-4 h-4"/> },
-            [ViewingStatus.CANCELLED]: { text: 'Cancelled (Refunded)', color: 'text-gray-800', bgColor: 'bg-gray-100', icon: <Icons.XCircleIcon className="w-4 h-4"/> },
-        };
-        return statuses[status] || { text: 'Unknown', color: 'text-gray-800', bgColor: 'bg-gray-100', icon: <Icons.ExclamationTriangleIcon className="w-4 h-4"/> };
-    }
-
-    const getBillIcon = (type: BillType | 'RENT' | 'DEPOSIT') => {
-        switch(type) {
-            case BillType.ELECTRICITY: return <Icons.BoltIcon className="w-8 h-8 text-yellow-500" />;
-            case BillType.WATER: return <Icons.WaterDropIcon className="w-8 h-8 text-blue-500" />;
-            case BillType.MAINTENANCE: return <Icons.BuildingIcon className="w-8 h-8 text-gray-500" />;
-            case 'RENT': return <Icons.BanknotesIcon className="w-8 h-8 text-green-500" />;
-            case 'DEPOSIT': return <Icons.ShieldCheckIcon className="w-8 h-8 text-indigo-500" />;
-        }
-    }
-
-    const getPaymentIcon = (type: PaymentType) => {
-        const iconClass = "w-10 h-10 p-2 rounded-full";
-        const iconMapping: Record<PaymentType, React.ReactElement> = {
-            [PaymentType.RENT]: <div className="bg-green-100"><Icons.BanknotesIcon className={`${iconClass} text-green-600`} /></div>,
-            [PaymentType.DEPOSIT]: <div className="bg-blue-100"><Icons.ShieldCheckIcon className={`${iconClass} text-blue-600`} /></div>,
-            [PaymentType.BILL]: <div className="bg-yellow-100"><Icons.BoltIcon className={`${iconClass} text-yellow-600`} /></div>,
-            [PaymentType.REFUND]: <div className="bg-purple-100"><Icons.CreditCardIcon className={`${iconClass} text-purple-600`} /></div>,
-            [PaymentType.VIEWING_ADVANCE]: <div className="bg-indigo-100"><Icons.KeyIcon className={`${iconClass} text-indigo-600`} /></div>,
-            [PaymentType.PLATFORM_FEE]: <div className="bg-gray-100"><Icons.HomeIcon className={`${iconClass} text-gray-600`} /></div>,
-        };
-        return iconMapping[type] || <div className="bg-gray-100"><Icons.CreditCardIcon className={`${iconClass} text-gray-600`} /></div>;
-    }
-
-    const getPaymentStatusBadge = (status: 'Paid' | 'Failed' | 'Refunded') => {
-        const statuses = {
-            Paid: 'bg-green-100 text-green-800',
-            Failed: 'bg-red-100 text-red-800',
-            Refunded: 'bg-indigo-100 text-indigo-800',
-        };
-        return <span className={`px-3 py-1 text-sm font-semibold rounded-full ${statuses[status]}`}>{status}</span>;
-    }
-  
     const activeAgreements = agreements.filter(a => a.agreement.signedByTenant && a.agreement.signedByOwner);
-
-    const propertiesForTasks = useMemo(() => activeAgreements.map(a => a.property), [activeAgreements]);
-
-    const relevantUsersForTasks = useMemo(() => {
+    const propertiesForMaintenance = useMemo(() => activeAgreements.map(a => a.property), [activeAgreements]);
+    const relevantUsersForMaintenance = useMemo(() => {
         const ownerIds = new Set(activeAgreements.map(a => a.property.ownerId));
         return users.filter(u => u.id === user.id || ownerIds.has(u.id));
     }, [users, activeAgreements, user.id]);
 
-    const filteredAndSortedTasks = useMemo(() => {
-        let processedTasks = [...tasks];
-        processedTasks = processedTasks.filter(task => {
-            if (taskFilterStatus !== 'All' && task.status !== taskFilterStatus) return false;
-            if (taskFilterProperty !== 'All' && task.propertyId !== taskFilterProperty) return false;
-            if (taskFilterAssignee !== 'All' && task.assignedToId !== taskFilterAssignee) return false;
-            return true;
+    const allBillableItems = useMemo(() => {
+        // This logic combines utility bills and rent/deposit applications into a single list for display
+        const billItems = bills.map(bill => {
+            const property = properties.find(p => p.id === bill.propertyId);
+            return { id: `bill-${bill.id}`, type: 'bill' as const, title: `${bill.type.charAt(0) + bill.type.slice(1).toLowerCase()} Bill`, propertyTitle: property?.title || 'N/A', amount: bill.amount, status: bill.isPaid ? 'Paid' as const : 'Unpaid' as const, date: bill.isPaid ? bill.paidOn! : bill.dueDate, rawDate: new Date(bill.isPaid ? bill.paidOn! : bill.dueDate), data: bill };
         });
-        processedTasks.sort((a, b) => {
-            switch (taskSortBy) {
-                case 'dueDate-asc': return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                case 'dueDate-desc': return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
-                case 'createdAt-desc': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                case 'status':
-                    const statusOrder = { [TaskStatus.TODO]: 1, [TaskStatus.IN_PROGRESS]: 2, [TaskStatus.DONE]: 3 };
-                    return statusOrder[a.status] - statusOrder[b.status];
-                default: return 0;
+
+        const applicationItems = applications.map(({ application, property }) => {
+            let item = null;
+            if ([ApplicationStatus.RENT_DUE, ApplicationStatus.RENT_PAID, ApplicationStatus.OFFLINE_PAYMENT_PENDING].includes(application.status)) {
+                item = { id: application.id, type: 'rent' as const, title: 'Monthly Rent', propertyTitle: property.title, amount: application.amount!, status: application.status === ApplicationStatus.RENT_PAID ? 'Paid' as const : application.status === ApplicationStatus.OFFLINE_PAYMENT_PENDING ? 'Pending' as const : 'Unpaid' as const, date: application.dueDate!, rawDate: new Date(application.dueDate!), data: { application, property } };
+            } else if ([ApplicationStatus.DEPOSIT_DUE, ApplicationStatus.DEPOSIT_PAID].includes(application.status)) {
+                 const status = application.status === ApplicationStatus.DEPOSIT_PAID ? 'Pending' : 'Unpaid';
+                item = { id: application.id, type: 'deposit' as const, title: 'Deposit & First Rent', propertyTitle: property.title, amount: application.amount!, status: status as 'Unpaid' | 'Pending', date: new Date().toISOString(), rawDate: new Date(), data: { application, property } };
+            }
+            return item;
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
+
+        const combined = [...billItems, ...applicationItems];
+        const unpaid = combined.filter(item => item.status === 'Unpaid' || item.status === 'Pending');
+        const paid = combined.filter(item => item.status === 'Paid');
+        
+        unpaid.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+        paid.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+
+        return [...unpaid, ...paid];
+    }, [bills, applications, properties]);
+    
+    const actionItems = useMemo(() => {
+        const items = [];
+        if (user.kycStatus !== 'Verified') {
+            items.push({ id: 'verify', text: 'Complete your KYC verification', action: () => onTabChange('verification'), icon: <Icons.ShieldCheckIcon className="w-5 h-5 text-yellow-600"/> });
+        }
+        agreements.forEach(({agreement, property}) => {
+            if (agreement.signedByOwner && !agreement.signedByTenant) {
+                items.push({ id: `sign-${agreement.id}`, text: `Sign agreement for "${property.title}"`, action: () => onSignAgreement(agreement, property), icon: <Icons.PencilIcon className="w-5 h-5 text-blue-600"/> });
             }
         });
-        return processedTasks;
-    }, [tasks, taskSortBy, taskFilterStatus, taskFilterProperty, taskFilterAssignee]);
+        allBillableItems.filter(i => i.status === 'Unpaid').slice(0, 2).forEach(item => {
+            items.push({ id: `pay-${item.id}`, text: `Pay ${item.title.toLowerCase()} of ₹${item.amount.toLocaleString()}`, action: () => {
+                 if (item.type === 'bill') onPayBill((item.data as Bill).id);
+                 else onInitiatePaymentFlow((item.data as any).application, (item.data as any).property);
+            }, icon: <Icons.BanknotesIcon className="w-5 h-5 text-red-600"/> });
+        });
+        return items;
+    }, [user.kycStatus, agreements, allBillableItems, onTabChange, onSignAgreement, onPayBill, onInitiatePaymentFlow]);
 
+    const { filteredBillableItems, BillCard, BillFilterButton } = useMemo(() => {
+        const getBillIcon = (type: BillType | 'RENT' | 'DEPOSIT') => {
+            switch (type) {
+                case BillType.ELECTRICITY:
+                    return <Icons.BoltIcon className="w-6 h-6 text-yellow-600" />;
+                case BillType.WATER:
+                    return <Icons.WaterDropIcon className="w-6 h-6 text-blue-600" />;
+                case BillType.MAINTENANCE:
+                    return <Icons.ClipboardDocumentListIcon className="w-6 h-6 text-gray-600" />;
+                case 'RENT':
+                    return <Icons.BanknotesIcon className="w-6 h-6 text-green-600" />;
+                case 'DEPOSIT':
+                    return <Icons.KeyIcon className="w-6 h-6 text-indigo-600" />;
+                default:
+                    return <Icons.CreditCardIcon className="w-6 h-6 text-gray-500" />;
+            }
+        };
+        const getPaymentStatusBadge = (status: 'Paid' | 'Unpaid' | 'Pending' | 'Failed' | 'Refunded') => {
+            const statusInfo = {
+                Paid: { text: 'Paid', color: 'bg-green-100 text-green-800' },
+                Unpaid: { text: 'Unpaid', color: 'bg-red-100 text-red-800' },
+                Pending: { text: 'Owner Confirmation', color: 'bg-yellow-100 text-yellow-800' },
+                Failed: { text: 'Failed', color: 'bg-red-100 text-red-800' },
+                Refunded: { text: 'Refunded', color: 'bg-blue-100 text-blue-800' },
+            };
+            const info = statusInfo[status] || { text: status, color: 'bg-gray-100 text-gray-800' };
+            return <span className={`px-2 py-1 text-xs font-bold rounded-full ${info.color}`}>{info.text}</span>;
+        };
 
-    return (
-        <div>
-            {isCreateTaskModalOpen && (
-                <CreateTaskModal
-                    onClose={() => setIsCreateTaskModalOpen(false)}
-                    onSubmit={onAddTask}
-                    properties={propertiesForTasks}
-                    users={relevantUsersForTasks}
-                />
-            )}
-            <div className="mb-6">
+        const BillFilterButton: React.FC<{ filter: 'all' | 'utilities' | 'rent'; label: string }> = ({ filter, label }) => (
+            <button
+                onClick={() => setBillFilter(filter)}
+                className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
+                    billFilter === filter
+                        ? 'bg-primary text-white'
+                        : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                }`}
+            >
+                {label}
+            </button>
+        );
+
+        const BillCard: React.FC<{ item: (typeof allBillableItems)[0] }> = ({ item }) => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const itemDueDate = new Date(item.rawDate);
+            itemDueDate.setHours(0, 0, 0, 0);
+
+            const isOverdue = item.status === 'Unpaid' && itemDueDate < today;
+            const isRecentPayment = item.status === 'Paid' && item.id === recentlyPaidApplicationId;
+
+            const renderDateInfo = () => {
+                if (item.status === 'Paid') {
+                    return <p className="text-xs text-neutral-500">Paid on {new Date(item.date).toLocaleDateString()}</p>;
+                }
+                if (item.status === 'Pending') {
+                    return <p className="text-xs font-semibold text-yellow-600">Awaiting owner confirmation</p>;
+                }
+                if (isOverdue) {
+                    return <p className="text-xs font-bold text-red-600">Overdue since {new Date(item.date).toLocaleDateString()}</p>;
+                }
+                return <p className="text-xs text-neutral-500">Due by {new Date(item.date).toLocaleDateString()}</p>;
+            };
+
+            return (
+                <div className="p-4 border rounded-lg flex flex-col sm:flex-row items-start gap-4">
+                    <div className="p-2 bg-neutral-100 rounded-full">
+                        {getBillIcon(item.type === 'bill' ? (item.data as Bill).type : item.type.toUpperCase() as 'RENT' | 'DEPOSIT')}
+                    </div>
+                    <div className="flex-grow">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="font-bold">{item.title}</h4>
+                                <p className="text-xs text-neutral-500">{item.propertyTitle}</p>
+                            </div>
+                            {getPaymentStatusBadge(item.status)}
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mt-3 gap-2">
+                            <div>
+                                <p className="text-xl font-bold">₹{item.amount.toLocaleString()}</p>
+                                {renderDateInfo()}
+                            </div>
+                             {isRecentPayment ? (
+                                <PaymentSuccessMessage onComplete={onClearRecentlyPaid} size="small" message="Paid Successfully!" />
+                            ) : item.status === 'Unpaid' ? (
+                                <button
+                                    onClick={() => {
+                                        if (item.type === 'bill') {
+                                            onPayBill((item.data as Bill).id);
+                                        } else {
+                                            onInitiatePaymentFlow((item.data as any).application, (item.data as any).property);
+                                        }
+                                    }}
+                                    className={`px-4 py-2 text-white font-semibold rounded-md text-sm w-full sm:w-auto transition-colors ${
+                                        isOverdue ? 'bg-red-600 hover:bg-red-700' : 'bg-secondary hover:bg-primary'
+                                    }`}
+                                >
+                                    Pay Now
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        return {
+            filteredBillableItems: (() => {
+                if (billFilter === 'all') return allBillableItems;
+                if (billFilter === 'utilities') return allBillableItems.filter(item => item.type === 'bill');
+                if (billFilter === 'rent') return allBillableItems.filter(item => item.type === 'rent' || item.type === 'deposit');
+                return [];
+            })(),
+            BillCard,
+            BillFilterButton,
+        };
+    }, [billFilter, allBillableItems, onPayBill, onInitiatePaymentFlow, recentlyPaidApplicationId, onClearRecentlyPaid]);
+
+    const handleReviewSubmit = (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => {
+        onLeaveReview(agreementId, reviewData);
+        setReviewingAgreement(null);
+    };
+
+    // Render Functions
+    const renderOverview = () => (
+        <div className="space-y-8">
+            <div>
                 <h2 className="text-3xl font-bold text-neutral-900">Welcome, {user.name.split(' ')[0]}!</h2>
                 <p className="text-neutral-600">Here's an overview of your rental activity.</p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard 
-                    icon={<Icons.ShieldCheckIcon className="w-6 h-6 text-blue-800"/>} 
-                    title="Verification Status" 
-                    value={<KycStatusBadge status={user.kycStatus} large />}
-                    color="bg-blue-100" 
-                />
-                <StatCard 
-                    icon={<Icons.BanknotesIcon className="w-6 h-6 text-red-800"/>} 
-                    title="Upcoming Payments" 
-                    value={paymentItems.length} 
-                    color="bg-red-100" 
-                />
-                <StatCard 
-                    icon={<Icons.DocumentCheckIcon className="w-6 h-6 text-green-800"/>} 
-                    title="Active Rentals" 
-                    value={activeAgreements.length} 
-                    color="bg-green-100" 
-                />
-                 <StatCard 
-                    icon={<Icons.PencilIcon className="w-6 h-6 text-indigo-800"/>} 
-                    title="Pending Agreements" 
-                    value={pendingAgreementSignatures} 
-                    color="bg-indigo-100" 
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard icon={<Icons.ShieldCheckIcon className="w-6 h-6 text-blue-800"/>} title="Verification Status" value={<KycStatusBadge status={user.kycStatus} large />} color="bg-blue-100" />
+                <StatCard icon={<Icons.BanknotesIcon className="w-6 h-6 text-red-800"/>} title="Upcoming Payments" value={allBillableItems.filter(i => i.status === 'Unpaid' || i.status === 'Pending').length} color="bg-red-100" />
+                <StatCard icon={<Icons.DocumentCheckIcon className="w-6 h-6 text-green-800"/>} title="Active Rentals" value={activeAgreements.length} color="bg-green-100" />
+                <StatCard icon={<Icons.PencilIcon className="w-6 h-6 text-indigo-800"/>} title="Pending Agreements" value={pendingAgreementSignatures} color="bg-indigo-100" />
             </div>
-
-
-            <div className="border-b mb-6 flex flex-wrap">
-                <TabButton id="agreements" label="My Agreements" count={pendingAgreementSignatures} />
-                <TabButton id="bills" label="Bills & Payments" count={paymentItems.length} />
-                <TabButton id="tasks" label="Tasks" count={tasks.filter(t => t.status !== TaskStatus.DONE).length} />
-                <TabButton id="history" label="Payment History" />
-                <TabButton id="viewings" label="My Viewings" />
-                <TabButton id="verification" label="Verification" />
-            </div>
-
-            {activeTab === 'agreements' && (
-                <div className="space-y-4">
-                    {applications.filter(a => a.application.status === ApplicationStatus.MOVE_IN_READY).map(({application, property}) => (
-                        <div key={`move-in-${application.id}`} className="p-4 border-2 border-teal-200 rounded-lg bg-white flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <Icons.KeyIcon className="w-8 h-8 text-teal-500" />
-                                <div>
-                                    <h3 className="font-bold text-lg text-teal-800">Move-in Ready!</h3>
-                                    <p className="text-sm text-neutral-600">{property.title}</p>
-                                    <p className="text-sm text-neutral-500">Payment successful! Please coordinate with the owner for key handover.</p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {agreements.length > 0 ? agreements.map(({ agreement, property }) => (
-                        <div key={agreement.id} className="p-4 border rounded-lg bg-white">
-                            <h3 className="font-bold text-lg">{property.title}</h3>
-                            <p className="text-sm text-neutral-500">{property.address}</p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
-                                <span>Rent: <span className="font-semibold">₹{agreement.rentAmount.toLocaleString()}</span></span>
-                                <span>Deposit: <span className="font-semibold">₹{agreement.depositAmount.toLocaleString()}</span></span>
-                                <span>Start Date: <span className="font-semibold">{new Date(agreement.startDate).toLocaleDateString()}</span></span>
-                            </div>
-                            <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                                <div className="flex items-center gap-4">
-                                    {agreement.signedByOwner && !agreement.signedByTenant ? (
-                                        <button
-                                            onClick={() => onSignAgreement(agreement, property)}
-                                            className="px-4 py-2 bg-secondary hover:bg-primary text-white font-semibold rounded-md text-sm transition-colors duration-300"
-                                        >
-                                            Review & Sign Agreement
-                                        </button>
-                                    ) : null}
-                                    <button
-                                        onClick={() => onViewAgreementDetails(agreement, property)}
-                                        className="text-sm font-semibold text-primary hover:underline"
-                                    >
-                                        View Details
-                                    </button>
-                                </div>
-                                <button onClick={() => onRaiseDispute(agreement.id, 'Property')} className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800 font-semibold">
-                                    <Icons.ExclamationTriangleIcon className="w-4 h-4" /> Raise Dispute
-                                </button>
-                            </div>
-                        </div>
-                    )) : <p>You have no active rentals.</p>}
-                </div>
-            )}
-
-            {activeTab === 'viewings' && (
-                <div className="space-y-4">
-                    {viewings.length > 0 ? viewings.map(({ viewing, property }) => {
-                        const statusInfo = getViewingStatusInfo(viewing.status);
-                        return (
-                             <div key={viewing.id} className="p-4 border rounded-lg bg-white">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h3 className="font-semibold">{property.title}</h3>
-                                        <p className="text-sm text-neutral-500">{property.address}</p>
-                                    </div>
-                                    <p className={`px-2 py-1 text-xs font-bold rounded-full flex items-center gap-1.5 ${statusInfo.bgColor} ${statusInfo.color}`}>{statusInfo.icon}{statusInfo.text}</p>
-                                </div>
-                                <div className="mt-3 pt-3 border-t text-sm text-neutral-600 space-y-1">
-                                    {viewing.scheduledAt && (
-                                        <div className="flex items-center gap-2">
-                                            <Icons.CalendarDaysIcon className="w-4 h-4 text-neutral-500 flex-shrink-0" />
-                                            <span>
-                                                {viewing.status === 'REQUESTED' ? 'Proposed time: ' : 'Scheduled for: '}
-                                                <span className="font-semibold">{new Date(viewing.scheduledAt).toLocaleString()}</span>
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                        <Icons.ClockIcon className="w-4 h-4 text-neutral-500 flex-shrink-0" />
-                                        <span>Requested on: {new Date(viewing.requestedAt).toLocaleString()}</span>
-                                    </div>
-                                </div>
-                                {viewing.status === ViewingStatus.COMPLETED && (
-                                    <div className="mt-4 pt-4 border-t flex justify-end gap-3">
-                                        <button 
-                                            onClick={() => onCancelViewing(viewing.id)}
-                                            className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-sm transition-colors"
-                                        >
-                                            Not Interested
-                                        </button>
-                                        <button 
-                                            onClick={() => onConfirmRent(viewing.id)}
-                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md text-sm transition-colors duration-300"
-                                        >
-                                            Confirm Rent
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    }) : <p>You haven't requested any viewings yet.</p>}
-                </div>
-            )}
             
-            {activeTab === 'tasks' && (
+            {actionItems.length > 0 && (
                 <div className="bg-white p-6 rounded-lg shadow-md border">
-                    <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                        <h3 className="text-xl font-semibold text-neutral-800 flex items-center gap-2"><Icons.ClipboardDocumentListIcon className="w-6 h-6"/> My Tasks</h3>
-                        <button onClick={() => setIsCreateTaskModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary hover:bg-primary text-white font-semibold rounded-lg transition-colors duration-300">
-                            <Icons.PlusCircleIcon className="w-5 h-5" /> Create Task
-                        </button>
+                    <h3 className="text-xl font-semibold text-neutral-800 mb-4 flex items-center gap-2"><Icons.ExclamationTriangleIcon className="w-6 h-6 text-yellow-500"/> Action Items</h3>
+                    <div className="space-y-3">
+                        {actionItems.map(item => (
+                            <div key={item.id} className="p-3 bg-neutral-50 rounded-lg border flex justify-between items-center">
+                                <div className="flex items-center gap-3">{item.icon} <p className="text-sm font-medium text-neutral-700">{item.text}</p></div>
+                                <button onClick={item.action} className="text-sm font-semibold text-primary hover:underline">Take Action &rarr;</button>
+                            </div>
+                        ))}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-neutral-50 rounded-lg border">
-                        <div>
-                            <label htmlFor="task-sort" className="block text-sm font-medium text-gray-700">Sort By</label>
-                            <select id="task-sort" value={taskSortBy} onChange={e => setTaskSortBy(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                                <option value="dueDate-asc">Due Date (Soonest)</option>
-                                <option value="createdAt-desc">Date Created (Newest)</option>
-                                <option value="dueDate-desc">Due Date (Latest)</option>
-                                <option value="status">Status</option>
-                            </select>
+                </div>
+            )}
+
+            {allBillableItems.filter(i => i.status === 'Unpaid').length > 0 && (
+                 <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-xl font-semibold text-neutral-800 mb-4 flex items-center gap-2"><Icons.CalendarDaysIcon className="w-6 h-6 text-blue-500"/> Upcoming Payments</h3>
+                    <div className="space-y-4">{allBillableItems.filter(item => item.status === 'Unpaid').slice(0,3).map(item => <BillCard key={item.id} item={item} />)}</div>
+                </div>
+            )}
+        </div>
+    );
+    
+    const renderVerification = () => (
+        <div className="bg-white p-6 rounded-lg shadow-md border">
+            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
+                <Icons.ShieldCheckIcon className="w-6 h-6 text-primary"/>
+                Police Verification
+            </h3>
+            <p className="text-neutral-600 mb-6">Complete the background check form as required by local authorities. This information is shared securely with the property owner for verification purposes.</p>
+            
+            {verification.status === VerificationStatus.VERIFIED && (
+                <div className="p-6 bg-green-50 text-green-800 rounded-lg text-center flex items-center justify-center gap-2 border border-green-200">
+                    <Icons.CheckCircleIcon className="w-6 h-6" /> Your profile verification is complete and approved.
+                </div>
+            )}
+            {verification.status === VerificationStatus.PENDING && (
+                <div className="p-6 bg-yellow-50 text-yellow-800 rounded-lg text-center flex items-center justify-center gap-2 border border-yellow-200">
+                    <Icons.ClockIcon className="w-6 h-6" /> Your verification is under review by the property owner.
+                </div>
+            )}
+            {(verification.status === VerificationStatus.NOT_SUBMITTED || verification.status === VerificationStatus.REJECTED) && (
+                <>
+                    {verification.status === VerificationStatus.REJECTED && (
+                        <div className="p-4 mb-4 bg-red-50 text-red-800 rounded-lg border border-red-200">
+                            Your previous verification submission was rejected. Please review the details and resubmit.
                         </div>
-                        <div>
-                            <label htmlFor="task-filter-status" className="block text-sm font-medium text-gray-700">Status</label>
-                            <select id="task-filter-status" value={taskFilterStatus} onChange={e => setTaskFilterStatus(e.target.value as TaskStatus | 'All')} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                                <option value="All">All Statuses</option>
-                                {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="task-filter-property" className="block text-sm font-medium text-gray-700">Property</label>
-                            <select id="task-filter-property" value={taskFilterProperty} onChange={e => setTaskFilterProperty(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" disabled={propertiesForTasks.length === 0}>
-                                <option value="All">All Properties</option>
-                                {propertiesForTasks.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="task-filter-assignee" className="block text-sm font-medium text-gray-700">Assignee</label>
-                            <select id="task-filter-assignee" value={taskFilterAssignee} onChange={e => setTaskFilterAssignee(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                                <option value="All">All Assignees</option>
-                                {relevantUsersForTasks.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
-                        </div>
-                    </div>
+                    )}
+                    <PoliceVerificationForm 
+                        verification={verification}
+                        onSubmit={onSubmitVerification}
+                        user={user}
+                    />
+                </>
+            )}
+        </div>
+    );
+    
+    const renderViewings = () => {
+        const sortedViewings = [...viewings].sort((a, b) => new Date(b.viewing.requestedAt).getTime() - new Date(a.viewing.requestedAt).getTime());
+        const getViewingStatusInfo = (status: ViewingStatus) => {
+                switch (status) {
+                    case ViewingStatus.REQUESTED: return { text: 'Requested', color: 'bg-yellow-100 text-yellow-800' };
+                    case ViewingStatus.ACCEPTED: return { text: 'Accepted', color: 'bg-green-100 text-green-800' };
+                    case ViewingStatus.DECLINED: return { text: 'Declined', color: 'bg-red-100 text-red-800' };
+                    case ViewingStatus.COMPLETED: return { text: 'Decision Required', color: 'bg-blue-100 text-blue-800' };
+                    case ViewingStatus.CANCELLED: return { text: 'Cancelled', color: 'bg-gray-100 text-gray-800' };
+                    case ViewingStatus.TENANT_REJECTED: return { text: 'Not Interested', color: 'bg-gray-100 text-gray-800' };
+                    default: return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' };
+                }
+            };
+        return (
+            <div className="bg-white p-6 rounded-lg shadow-md border">
+                <h3 className="text-2xl font-bold text-neutral-800 mb-4">My Viewings</h3>
+                {sortedViewings.length > 0 ? (
                     <div className="space-y-4">
-                        {filteredAndSortedTasks.length > 0 ? (
-                            filteredAndSortedTasks.map(task => <TaskCard key={task.id} task={task} users={users} properties={properties} onUpdateStatus={onUpdateTaskStatus} />)
-                        ) : (
-                            <p className="text-center py-8 text-neutral-500">No tasks match the current filters.</p>
-                        )}
-                    </div>
-                </div>
-            )}
+                        {sortedViewings.map(({ viewing, property }) => {
+                            const statusInfo = getViewingStatusInfo(viewing.status);
+                            const scheduledDate = viewing.scheduledAt ? new Date(viewing.scheduledAt) : null;
+                            const canCancel = [ViewingStatus.REQUESTED, ViewingStatus.ACCEPTED].includes(viewing.status);
 
-            {activeTab === 'bills' && (
-                <div className="space-y-4">
-                    {paymentItems.length > 0 ? paymentItems.map((item) => {
-                        if (item.type === 'deposit') {
-                            const { application, property } = item.data;
                             return (
-                                <div key={`deposit-${application.id}`} className="p-4 border-2 border-red-200 rounded-lg bg-white flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        {getBillIcon('DEPOSIT')}
-                                        <div>
-                                            <h3 className="font-bold text-lg">Deposit & First Rent Due</h3>
-                                            <p className="text-sm text-neutral-600">{property.title}</p>
-                                            <p className="text-sm text-neutral-500">Amount: <span className="font-bold">₹{application.amount!.toLocaleString()}</span></p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => onInitiatePaymentFlow(application, property)} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-md transition-colors">Pay Now</button>
-                                </div>
-                            )
-                        } else if (item.type === 'rent') {
-                            const { application, property } = item.data;
-                            return (
-                                <div key={`rent-${application.id}`} className="p-4 border-2 border-red-200 rounded-lg bg-white flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        {getBillIcon('RENT')}
-                                        <div>
-                                            <h3 className="font-bold text-lg">Monthly Rent Due</h3>
-                                            <p className="text-sm text-neutral-600">{property.title}</p>
-                                            <p className="text-sm text-neutral-500">Due: <span className="font-semibold text-red-600">{new Date(application.dueDate!).toLocaleDateString()}</span> | Amount: <span className="font-bold">₹{application.amount!.toLocaleString()}</span></p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => onInitiatePaymentFlow(application, property)} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-md transition-colors">Pay Rent</button>
-                                </div>
-                            )
-                        } else if (item.type === 'offline') {
-                           const { application, property } = item.data;
-                           return (
-                                <div key={`offline-${application.id}`} className="p-4 border-2 border-cyan-200 rounded-lg bg-white flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        {getBillIcon('RENT')}
-                                        <div>
-                                            <h3 className="font-bold text-lg">Offline Payment Submitted</h3>
-                                            <p className="text-sm text-neutral-600">{property.title}</p>
-                                            <p className="text-sm text-cyan-700 font-semibold">Waiting for owner to acknowledge</p>
-                                        </div>
-                                    </div>
-                                    <button className="px-6 py-2 bg-cyan-200 text-cyan-800 text-sm font-bold rounded-md cursor-not-allowed">Pending</button>
-                                </div>
-                            )
-                        } else {
-                            const bill = item.data;
-                            return (
-                                <div key={bill.id} className="p-4 border rounded-lg bg-white flex justify-between items-center">
-                                   <div className="flex items-center gap-4">
-                                       {getBillIcon(bill.type)}
-                                       <div>
-                                           <h3 className="font-semibold capitalize">{bill.type.toLowerCase()} Bill</h3>
-                                           <p className="text-sm text-neutral-500">Due: {new Date(bill.dueDate).toLocaleDateString()} | Amount: <span className="font-bold">₹{bill.amount.toLocaleString()}</span></p>
-                                       </div>
-                                   </div>
-                                   <button onClick={() => onPayBill(bill.id)} className="px-4 py-1.5 bg-secondary text-white text-sm font-semibold rounded-md">Pay Now</button>
-                               </div>
-                           )
-                        }
-                    }) : <p className="text-center bg-white p-6 rounded-lg text-neutral-500">No outstanding payments. You're all caught up!</p>}
-                </div>
-            )}
-
-             {activeTab === 'history' && (
-                 <div>
-                    <div className="bg-white p-6 rounded-lg shadow-md border mb-6">
-                        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                            <h3 className="text-xl font-semibold text-neutral-800 flex items-center gap-2"><Icons.FilterIcon className="w-5 h-5"/> Filter History</h3>
-                            <button onClick={clearPaymentFilters} className="text-sm font-semibold text-primary hover:underline">Clear Filters</button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div>
-                                <label htmlFor="filterType" className="text-sm font-medium text-gray-700">Type</label>
-                                <select id="filterType" value={paymentFilterType} onChange={e => setPaymentFilterType(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                                    <option value="">All Types</option>
-                                    {Object.values(PaymentType).map(type => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="filterStatus" className="text-sm font-medium text-gray-700">Status</label>
-                                <select id="filterStatus" value={paymentFilterStatus} onChange={e => setPaymentFilterStatus(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                                    <option value="">All Statuses</option>
-                                    <option value="Paid">Paid</option>
-                                    <option value="Failed">Failed</option>
-                                    <option value="Refunded">Refunded</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="filterStartDate" className="text-sm font-medium text-gray-700">Start Date</label>
-                                <input type="date" id="filterStartDate" value={paymentFilterStartDate} onChange={e => setPaymentFilterStartDate(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                            <div>
-                                <label htmlFor="filterEndDate" className="text-sm font-medium text-gray-700">End Date</label>
-                                <input type="date" id="filterEndDate" value={paymentFilterEndDate} onChange={e => setPaymentFilterEndDate(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                        </div>
-                    </div>
-                     {filteredPayments.length > 0 ? (
-                        <div className="space-y-4">
-                            {filteredPayments.map(payment => {
-                                const property = properties.find(p => p.id === payment.propertyId);
-                                return (
-                                    <div key={payment.id} className="p-4 border rounded-lg bg-white flex justify-between items-center">
-                                        <div className="flex items-center gap-4">
-                                            {getPaymentIcon(payment.type)}
+                                <div key={viewing.id} className="p-4 border rounded-lg flex flex-col sm:flex-row gap-4">
+                                    <img src={property.images[0]} alt={property.title} className="w-full sm:w-40 h-32 object-cover rounded-md" />
+                                    <div className="flex-grow">
+                                        <div className="flex justify-between items-start">
                                             <div>
-                                                <h3 className="font-bold capitalize">{payment.type.toLowerCase().replace('_', ' ')}</h3>
-                                                <p className="text-sm text-neutral-600">{property?.title || 'N/A'}</p>
-                                                <p className="text-sm text-neutral-500">{new Date(payment.paymentDate).toLocaleString()}</p>
+                                                <h4 className="font-bold">{property.title}</h4>
+                                                <p className="text-xs text-neutral-500">{property.address}</p>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
+                                        </div>
+                                        {scheduledDate && (
+                                            <div className="text-sm text-neutral-600 mt-2">
+                                                <p><strong>Scheduled for:</strong> {scheduledDate.toLocaleString()}</p>
+                                            </div>
+                                        )}
+                                        {viewing.status === ViewingStatus.COMPLETED ? (
+                                            <div className="mt-4 pt-4 border-t border-dashed">
+                                                <h5 className="font-semibold text-md text-neutral-800 mb-2">What's your decision?</h5>
+                                                <p className="text-xs text-neutral-500 mb-3">Let the owner know if you'd like to proceed with renting this property.</p>
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <button onClick={() => onConfirmRent(viewing.id)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md text-sm transition-colors">
+                                                        <Icons.CheckCircleIcon className="w-5 h-5"/> I'm Interested
+                                                    </button>
+                                                    <button onClick={() => onTenantReject(viewing.id)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-sm transition-colors">
+                                                        <Icons.XCircleIcon className="w-5 h-5"/> Not Interested
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-neutral-500 mt-2 text-center">If you're not interested, your viewing advance will be refunded.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
+                                                {canCancel && (
+                                                    <button onClick={() => onCancelViewing(viewing.id)} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md text-xs">Cancel Viewing</button>
+                                                )}
+                                                <button onClick={() => onRaiseDispute(viewing.id, 'Viewing')} className="px-3 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-xs">Raise Dispute</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-12">
+                        <Icons.CalendarDaysIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                        <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Scheduled Viewings</h3>
+                        <p className="mt-1 text-neutral-500">When you request to see a property, it will appear here.</p>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderMyRentals = () => {
+        const onboardingApplications = applications.filter(({ application }) => 
+            !application.id.startsWith('rent-') && 
+            !application.id.startsWith('deposit-') &&
+            application.status !== ApplicationStatus.REJECTED &&
+            application.status !== ApplicationStatus.COMPLETED &&
+            !agreements.some(a => `agree-${application.id}` === a.agreement.id)
+        );
+
+        const activeAndCompletedRentals = agreements;
+
+        return (
+            <div className="bg-white p-6 rounded-lg shadow-md border space-y-8">
+                <div>
+                    <h3 className="text-2xl font-bold text-neutral-800 mb-4">My Active Rentals</h3>
+                    {activeAndCompletedRentals.length > 0 ? (
+                        <div className="space-y-8">
+                            {activeAndCompletedRentals.map(({ agreement, property }) => {
+                                const allPropertyApplications = applications
+                                    .filter(a => a.application.propertyId === property.id)
+                                    .map(a => a.application);
+
+                                return (
+                                <div key={agreement.id} className="p-6 border rounded-lg shadow-sm">
+                                    <div className="flex flex-col sm:flex-row gap-6 mb-4">
+                                        <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-md" />
+                                        <div className="flex-grow">
+                                            <h4 className="text-lg font-bold">{property.title}</h4>
+                                            <p className="text-xs text-neutral-500">{property.address}</p>
+                                            <p className="text-sm mt-2"><strong>Lease Term:</strong> {new Date(agreement.startDate).toLocaleDateString()} to {new Date(agreement.endDate).toLocaleDateString()}</p>
+                                            <p className="text-sm mt-1"><strong>Monthly Rent:</strong> ₹{agreement.rentAmount.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                    <RentCycleTracker
+                                        agreement={agreement}
+                                        property={property}
+                                        applications={allPropertyApplications}
+                                        onPayNow={onInitiatePaymentFlow}
+                                        payments={payments}
+                                    />
+                                </div>
+                            )})}
+                        </div>
+                    ) : (
+                         <div className="text-center py-12">
+                            <Icons.HomeIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                            <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Active Rentals</h3>
+                            <p className="mt-1 text-neutral-500">Your active rentals will appear here once the agreement is complete.</p>
+                         </div>
+                    )}
+                </div>
+                
+                <div className="pt-8 border-t">
+                     <h3 className="text-2xl font-bold text-neutral-800 mb-4">My Pending Applications</h3>
+                     {onboardingApplications.length > 0 ? (
+                        <div className="space-y-8">
+                             {onboardingApplications.map(({ application, property }) => {
+                                const effectiveStatus = applications.find(a => a.application.id === `deposit-${application.id}`)?.application.status || application.status;
+                                return (
+                                    <div key={application.id} className="p-6 border rounded-lg shadow-sm">
+                                        <div className="flex flex-col sm:flex-row gap-6 mb-4">
+                                            <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-md" />
+                                            <div>
+                                                <h4 className="text-lg font-bold">{property.title}</h4>
+                                                <p className="text-xs text-neutral-500">{property.address}</p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-lg">₹{payment.amount.toLocaleString()}</p>
-                                            {getPaymentStatusBadge(payment.status)}
-                                        </div>
+                                        <OnboardingTracker status={effectiveStatus} />
                                     </div>
                                 );
                             })}
                         </div>
                      ) : (
-                        <div className="text-center py-12 bg-white rounded-lg border">
-                          <Icons.TableCellsIcon className="w-12 h-12 mx-auto text-neutral-300" />
-                          <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Payments Found</h3>
-                          <p className="mt-1 text-neutral-500">No transactions match your current filter criteria.</p>
+                        <div className="text-center py-12">
+                            <Icons.DocumentTextIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                            <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Pending Applications</h3>
+                            <button onClick={onBrowseClick} className="mt-4 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-md text-sm transition-colors duration-300">
+                                Find Your Next Home
+                            </button>
                         </div>
                      )}
                 </div>
-            )}
+            </div>
+        );
+    };
 
-            {activeTab === 'verification' && (
-                <VerificationForm verification={verification} onSubmit={onSubmitVerification} />
+    const renderSavedProperties = () => (
+        <div className="bg-white p-6 rounded-lg shadow-md border">
+            <h3 className="text-2xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
+                <Icons.HeartIcon className="w-6 h-6 text-primary" />
+                Saved Properties
+            </h3>
+            {savedProperties.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {savedProperties.map(property => (
+                        <PropertyCard
+                            key={property.id}
+                            property={property}
+                            owner={users.find(u => u.id === property.ownerId)}
+                            onSelectProperty={onSelectProperty}
+                            isSaved={true}
+                            onToggleSave={onToggleSaveProperty}
+                            currentUser={user}
+                        />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-12">
+                    <Icons.HeartIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Saved Properties</h3>
+                    <p className="mt-1 text-neutral-500">When you save a property, it will appear here.</p>
+                    <button
+                        onClick={onBrowseClick}
+                        className="mt-4 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-md text-sm transition-colors duration-300"
+                    >
+                        Start Browsing
+                    </button>
+                </div>
             )}
+        </div>
+    );
+
+    const renderBillsAndPayments = () => (
+        <div className="bg-white p-6 rounded-lg shadow-md border">
+            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
+                <Icons.BanknotesIcon className="w-6 h-6 text-primary" />
+                Bills & Payments
+            </h3>
+            <p className="text-neutral-600 mb-6">Track and pay your rent, utilities, and other bills.</p>
+    
+            <div className="flex items-center gap-2 mb-6">
+                <BillFilterButton filter="all" label="All" />
+                <BillFilterButton filter="rent" label="Rent & Deposit" />
+                <BillFilterButton filter="utilities" label="Utilities" />
+            </div>
+    
+            {filteredBillableItems.length > 0 ? (
+                <div className="space-y-4">
+                    {filteredBillableItems.map(item => (
+                        <BillCard key={item.id} item={item} />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-12">
+                    <Icons.CheckCircleIcon className="w-12 h-12 mx-auto text-green-400" />
+                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">All Caught Up!</h3>
+                    <p className="mt-1 text-neutral-500">You have no pending bills.</p>
+                </div>
+            )}
+        </div>
+    );
+
+    const renderPastRentals = () => {
+        const pastAgreements = agreements.filter(a => new Date(a.agreement.endDate) < new Date());
+    
+        return (
+            <div className="bg-white p-6 rounded-lg shadow-md border">
+                <h3 className="text-2xl font-bold text-neutral-800 mb-4">Past Rentals</h3>
+                {pastAgreements.length > 0 ? (
+                    <div className="space-y-4">
+                        {pastAgreements.map(({ agreement, property }) => (
+                            <div key={agreement.id} className="p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div>
+                                    <h4 className="font-bold">{property.title}</h4>
+                                    <p className="text-sm text-neutral-500">Lease Ended: {new Date(agreement.endDate).toLocaleDateString()}</p>
+                                </div>
+                                {agreement.reviewLeft ? (
+                                    <p className="text-sm font-semibold text-green-600 flex items-center gap-1"><Icons.CheckCircleIcon className="w-4 h-4"/> Review Submitted</p>
+                                ) : (
+                                    <button onClick={() => setReviewingAgreement({ agreement, property })} className="px-4 py-2 bg-secondary text-white font-semibold rounded-md text-sm">
+                                        Leave a Review
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 text-neutral-500">
+                        <Icons.ArrowLeftIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                        <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Past Rentals</h3>
+                        <p className="mt-1">Your completed rental agreements will appear here.</p>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderMaintenance = () => {
+        const sortedRequests = [...maintenanceRequests].sort((a, b) => {
+            if (requestSortBy === 'dueDate-asc') return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            if (requestSortBy === 'dueDate-desc') return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Default: newest first
+        });
+
+        const filteredRequests = sortedRequests.filter(r => {
+            if (requestFilterStatus !== 'All' && r.status !== requestFilterStatus) return false;
+            if (requestFilterProperty !== 'All' && r.propertyId !== requestFilterProperty) return false;
+            if (requestFilterAssignee !== 'All' && r.assignedToId !== requestFilterAssignee) return false;
+            return true;
+        });
+
+        return (
+            <div className="space-y-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 className="text-3xl font-bold text-neutral-900">Maintenance Requests</h2>
+                        <p className="text-neutral-600">Report issues and track maintenance for your property.</p>
+                    </div>
+                    <button onClick={() => setIsCreateRequestModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition-colors duration-300 w-full sm:w-auto">
+                        <Icons.PlusCircleIcon className="w-5 h-5" /> Create New Request
+                    </button>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b">
+                        <select value={requestFilterStatus} onChange={e => setRequestFilterStatus(e.target.value as any)} className="p-2 border rounded-md text-sm"><option value="All">All Statuses</option>{Object.values(MaintenanceStatus).map(s => <option key={s} value={s}>{s}</option>)}</select>
+                        <select value={requestFilterProperty} onChange={e => setRequestFilterProperty(e.target.value)} className="p-2 border rounded-md text-sm"><option value="All">All Properties</option>{propertiesForMaintenance.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select>
+                        <select value={requestSortBy} onChange={e => setRequestSortBy(e.target.value)} className="p-2 border rounded-md text-sm"><option value="createdAt-desc">Newest First</option><option value="dueDate-asc">Due Date (Asc)</option><option value="dueDate-desc">Due Date (Desc)</option></select>
+                     </div>
+                     <div className="space-y-4">
+                        {filteredRequests.length > 0 ? filteredRequests.map(req => (
+                            <MaintenanceRequestCard key={req.id} request={req} users={users} properties={properties} currentUser={user} onUpdateStatus={onUpdateMaintenanceStatus} onAddComment={onAddMaintenanceComment} />
+                        )) : <p className="text-center py-8 text-neutral-500">No maintenance requests found.</p>}
+                     </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'overview': return renderOverview();
+            case 'verification': return renderVerification();
+            case 'viewings': return renderViewings();
+            case 'saved': return renderSavedProperties();
+            case 'myRentals': return renderMyRentals();
+            case 'bills': return renderBillsAndPayments();
+            case 'pastRentals': return renderPastRentals();
+            case 'maintenance': return renderMaintenance();
+            default: return renderOverview();
+        }
+    };
+    
+    const sidebarOptions = [
+        {id: "overview", label: "Overview", icon: <Icons.Squares2X2Icon className="w-5 h-5"/>, count: undefined},
+        {id: "myRentals", label: "My Rentals", icon: <Icons.DocumentTextIcon className="w-5 h-5"/>, count: pendingAgreementSignatures},
+        {id: "bills", label: "Bills & Payments", icon: <Icons.BanknotesIcon className="w-5 h-5"/>, count: allBillableItems.filter(i => i.status !== 'Paid').length},
+        {id: "maintenance", label: "Maintenance", icon: <Icons.ClipboardDocumentListIcon className="w-5 h-5"/>, count: maintenanceRequests.filter(t => t.status !== MaintenanceStatus.DONE).length},
+        {id: "viewings", label: "My Viewings", icon: <Icons.CalendarDaysIcon className="w-5 h-5"/>, count: undefined},
+        {id: "saved", label: "Saved Properties", icon: <Icons.HeartIcon className="w-5 h-5"/>, count: undefined},
+        {id: "pastRentals", label: "Past Rentals", icon: <Icons.ArrowLeftIcon className="w-5 h-5" />, count: undefined},
+        {id: "verification", label: "Verification", icon: <Icons.ShieldCheckIcon className="w-5 h-5"/>, count: undefined},
+    ];
+
+    // Final JSX
+    return (
+        <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row container mx-auto px-4 md:px-8 py-8 gap-8">
+            {isCreateRequestModalOpen && <CreateMaintenanceRequestModal onClose={() => setIsCreateRequestModalOpen(false)} onSubmit={onAddMaintenanceRequest} properties={propertiesForMaintenance} users={relevantUsersForMaintenance} currentUser={user} agreements={agreements}/>}
+            {reviewingAgreement && (
+                <LeaveReviewModal
+                    details={reviewingAgreement}
+                    onClose={() => setReviewingAgreement(null)}
+                    onSubmit={handleReviewSubmit}
+                />
+            )}
+            
+            <aside className="hidden md:block md:w-1/4 lg:w-1/5 flex-shrink-0">
+                <div className="bg-white p-4 rounded-lg shadow-md border space-y-2 sticky top-24">
+                    {sidebarOptions.map(opt => <SidebarButton key={opt.id} {...opt} activeTab={activeTab} onTabChange={onTabChange} />)}
+                </div>
+            </aside>
+            <main className="flex-grow min-w-0 overflow-y-auto custom-scrollbar">
+                <div className="md:hidden mb-4">
+                    <label htmlFor="dashboard-nav" className="sr-only">Select a section</label>
+                    <select id="dashboard-nav" value={activeTab} onChange={(e) => onTabChange(e.target.value)} className="w-full p-3 border rounded-lg shadow-sm text-lg font-semibold">
+                       {sidebarOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                    </select>
+                </div>
+                {renderContent()}
+            </main>
         </div>
     );
 };

@@ -8,6 +8,8 @@ interface AgreementSigningPageProps {
   agreement: Agreement;
   property: Property;
   currentUser: User;
+  renter: User;
+  owner: User;
   onInitiateSign: (agreementId: string) => void;
   onClose: () => void;
 }
@@ -16,11 +18,11 @@ const AgreementSigningPage: React.FC<AgreementSigningPageProps> = ({
   agreement,
   property,
   currentUser,
+  renter,
+  owner,
   onInitiateSign,
   onClose,
 }) => {
-  const renter = { name: "Renter" }; // Placeholder, assuming names are fetched elsewhere if needed
-  const owner = { name: "Owner" };
 
   const formattedMoveInDate = new Date(agreement.startDate).toLocaleDateString('en-US', {
     year: 'numeric',
