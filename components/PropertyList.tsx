@@ -551,7 +551,7 @@ const PropertyList: React.FC<PropertyListProps> = ({ properties, users, onSelect
   if (isDesktop) {
     return (
         <div className="flex h-[calc(100vh-4rem)]">
-            <div className={`transition-all duration-300 ease-in-out ${viewMode === 'list' ? 'w-1/2' : 'w-0'}`}>
+            <div className={`transition-all duration-300 ease-in-out ${viewMode === 'list' ? 'w-1/2' : 'w-0 overflow-hidden'}`}>
                 {viewMode === 'list' && ControlsAndList}
             </div>
             <div className="relative flex-grow">
