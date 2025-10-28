@@ -64,7 +64,6 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ properties, users, re
 
   const [mainImage, setMainImage] = useState(property.images?.[0] || 'https://picsum.photos/seed/placeholder/800/600');
   const [showAllAmenities, setShowAllAmenities] = useState(false);
-  const [isPanoModalOpen, setIsPanoModalOpen] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(hasCoordinates ? [property.latitude, property.longitude] : null);
   const [mapZoom, setMapZoom] = useState(15);
   const [selectedNearbyPlace, setSelectedNearbyPlace] = useState<{ place: NearbyPlace; coords: [number, number]; id: string } | null>(null);
@@ -272,43 +271,47 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ properties, users, re
             </InfoCard>
           )}
           
-          {property.nearbyPlaces && property.nearbyPlaces.length > 0 && (
-            <InfoCard title="What's Nearby?">
-                <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-neutral-500">Click a place to see it on the map.</p>
-                    <button onClick={() => {if(hasCoordinates) {setMapCenter([property.latitude, property.longitude]); setMapZoom(15); setSelectedNearbyPlace(null);}}} className="text-xs font-semibold text-primary hover:underline" disabled={!hasCoordinates}>Reset View</button>
+          <InfoCard title="Location & What's Nearby">
+            <div className="flex flex-col lg:flex-row gap-6">
+                <div className="lg:w-1/2">
+                    {hasCoordinates && mapCenter ? (
+                        <div className="h-80 rounded-lg overflow-hidden border">
+                            <MapComponent 
+                                center={mapCenter} 
+                                zoom={mapZoom} 
+                                markers={mapMarkers} 
+                                onMarkerClick={handleMapMarkerClick}
+                                polylinePositions={selectedNearbyPlace ? [[property.latitude, property.longitude], selectedNearbyPlace.coords] : undefined}
+                                selectedMarkerIds={selectedNearbyPlace ? [property.id, selectedNearbyPlace.id] : [property.id]}
+                            />
+                        </div>
+                    ) : (<p>Location data is not available for this property.</p>)}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
-                    {property.nearbyPlaces.map((place: NearbyPlace, index) => {
-                        const coords = getNearbyPlaceCoords(place, property, index);
-                        const isSelected = selectedNearbyPlace?.place.name === place.name;
-                        return (
-                            <button key={place.name} className={`flex items-center justify-between gap-3 text-left p-2 rounded-lg transition-colors w-full ${isSelected ? 'bg-primary/10' : 'hover:bg-neutral-100'}`} onClick={() => handleSelectNearbyPlace(place, index)} disabled={!coords}>
-                                <div className="flex items-center gap-3">
-                                    <NearbyPlaceIcon type={place.type} />
-                                    <div><p className="font-semibold text-neutral-800">{place.name}</p><p className="text-sm text-neutral-500">{place.type} &bull; {place.distance}</p></div>
-                                </div>
-                                {isSelected && <span className="text-xs font-bold text-primary flex-shrink-0">SELECTED</span>}
-                            </button>
-                        );
-                    })}
-                </div>
-            </InfoCard>
-          )}
-          
-          <InfoCard title="Location">
-            {hasCoordinates && mapCenter ? (
-                <div className="h-80 rounded-lg overflow-hidden">
-                    <MapComponent 
-                        center={mapCenter} 
-                        zoom={mapZoom} 
-                        markers={mapMarkers} 
-                        onMarkerClick={handleMapMarkerClick}
-                        polylinePositions={selectedNearbyPlace ? [[property.latitude, property.longitude], selectedNearbyPlace.coords] : undefined}
-                        selectedMarkerIds={selectedNearbyPlace ? [property.id, selectedNearbyPlace.id] : [property.id]}
-                     />
-                </div>
-            ) : (<p>Location data is not available for this property.</p>)}
+                 <div className="lg:w-1/2">
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm text-neutral-500">Click a place to see it on the map.</p>
+                        <button onClick={() => {if(hasCoordinates) {setMapCenter([property.latitude, property.longitude]); setMapZoom(15); setSelectedNearbyPlace(null);}}} className="text-xs font-semibold text-primary hover:underline" disabled={!hasCoordinates}>Reset View</button>
+                    </div>
+                    <div className="space-y-1 max-h-80 overflow-y-auto custom-scrollbar pr-2">
+                        {(property.nearbyPlaces || []).map((place, index) => {
+                            const coords = getNearbyPlaceCoords(place, property, index);
+                            const isSelected = selectedNearbyPlace?.place.name === place.name;
+                            return (
+                                <button key={index} className={`flex items-center justify-between gap-3 text-left p-2 rounded-lg transition-colors w-full ${isSelected ? 'bg-primary/10' : 'hover:bg-neutral-100'}`} onClick={() => handleSelectNearbyPlace(place, index)} disabled={!coords}>
+                                    <div className="flex items-center gap-3">
+                                        <NearbyPlaceIcon type={place.type} />
+                                        <div>
+                                            <p className="font-semibold text-neutral-800 text-sm">{place.name}</p>
+                                            <p className="text-xs text-neutral-500">{place.type} &bull; {place.distance}</p>
+                                        </div>
+                                    </div>
+                                    {isSelected && <span className="text-xs font-bold text-primary flex-shrink-0">ON MAP</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                 </div>
+            </div>
           </InfoCard>
 
           <InfoCard title="Reviews & Ratings">
@@ -343,7 +346,7 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ properties, users, re
                     <h3 className="text-xl font-bold mb-4">Interested in this property?</h3>
                     {property.availability === 'available' ? (<div className="space-y-3"><button onClick={() => onScheduleViewing(property)} className="w-full bg-secondary hover:bg-primary text-white font-bold py-3 px-4 rounded-lg transition-colors">Schedule a Visit</button><button onClick={() => onBookNow(property)} className="w-full bg-primary/10 hover:bg-primary/20 text-primary font-bold py-3 px-4 rounded-lg transition-colors">Book Now & Apply</button></div>) : (<p className="p-3 bg-red-100 text-red-800 text-center font-semibold rounded-md">This property has been rented out.</p>)}
                 </div>
-                {property.panoViewUrl && (<div className="bg-white p-6 rounded-lg shadow-lg border text-center"><h3 className="text-xl font-bold mb-2">Take a Virtual Tour</h3><p className="text-sm text-neutral-600 mb-4">Explore the property from the comfort of your home.</p><button onClick={() => setIsPanoModalOpen(true)} className="w-full bg-accent hover:bg-yellow-500 text-neutral-900 font-bold py-3 px-4 rounded-lg transition-colors">View 360° Tour</button></div>)}
+                {property.panoViewUrl && (<div className="bg-white p-6 rounded-lg shadow-lg border text-center"><h3 className="text-xl font-bold mb-2">Take a Virtual Tour</h3><p className="text-sm text-neutral-600 mb-4">Explore the property from the comfort of your home.</p><button onClick={() => window.open(property.panoViewUrl, '_blank', 'noopener,noreferrer')} className="block w-full bg-accent hover:bg-yellow-500 text-neutral-900 font-bold py-3 px-4 rounded-lg transition-colors">View 360° Tour</button></div>)}
             </div>
         </div>
       </div>
@@ -354,13 +357,6 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ properties, users, re
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {similarProperties.map(p => (<PropertyCard key={p.id} property={p} owner={users.find(u => u.id === p.ownerId)} onSelectProperty={onSelectProperty} currentUser={currentUser} isSaved={savedProperties.includes(p.id)} onToggleSave={onToggleSaveProperty} />))}
             </div>
-        </div>
-      )}
-      
-      {isPanoModalOpen && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={() => setIsPanoModalOpen(false)}>
-            <button onClick={() => setIsPanoModalOpen(false)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50"><Icons.XCircleIcon className="w-10 h-10" /></button>
-            <div className="w-full h-full p-4" onClick={e => e.stopPropagation()}><iframe src={property.panoViewUrl} className="w-full h-full border-0" allowFullScreen title="360 Pano View"></iframe></div>
         </div>
       )}
     </>

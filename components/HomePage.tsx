@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Property } from '../types';
-import { SearchIcon, LocationMarkerIcon, SparklesIcon, ShieldCheckIcon, PencilIcon, CreditCardIcon, UserGroupIcon, CheckCircleIcon } from './Icons';
+import { SearchIcon, LocationMarkerIcon, SparklesIcon, ShieldCheckIcon, PencilIcon, CreditCardIcon, UserGroupIcon, CheckCircleIcon, ArrowRightIcon } from './Icons';
 import PropertyCard from './PropertyCard';
 
 interface HomePageProps {
@@ -136,10 +136,25 @@ const HomePage: React.FC<HomePageProps> = ({ properties, onSearch, onSelectPrope
           <h2 className="text-4xl font-bold text-neutral-900 mb-12 text-center">Explore popular cities &amp; districts in {cityName}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
             {popularLocalities.map(loc => (
-                <a href="#" key={loc} onClick={(e) => handleLocationClick(e, loc)} className="block p-6 bg-white rounded-xl border shadow-sm hover:shadow-lg hover:border-primary transition-all group hover:scale-105">
-                    <h3 className="font-bold text-lg text-neutral-800">{loc}</h3>
-                    <p className="text-sm text-primary font-semibold mt-2 group-hover:underline">View Properties &rarr;</p>
-                </a>
+              <a
+                href="#"
+                key={loc}
+                onClick={(e) => handleLocationClick(e, loc)}
+                className="relative block h-40 rounded-xl overflow-hidden group shadow-lg"
+              >
+                <img
+                  src={`https://picsum.photos/seed/${loc.toLowerCase()}/400/300`}
+                  alt={loc}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors"></div>
+                <div className="absolute inset-0 p-4 flex flex-col justify-end text-white">
+                  <h3 className="font-bold text-lg">{loc}</h3>
+                  <div className="w-8 h-8 mt-2 bg-white/20 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <ArrowRightIcon className="w-5 h-5" />
+                  </div>
+                </div>
+              </a>
             ))}
           </div>
         </div>

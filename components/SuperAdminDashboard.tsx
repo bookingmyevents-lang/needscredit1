@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import type { Property, Application, User, Dispute, ActivityLog, Payment, Viewing } from '../types';
 import { ApplicationStatus, DisputeStatus, ActivityType, PaymentType, UserRole, ViewingStatus } from '../types';

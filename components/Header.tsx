@@ -41,6 +41,7 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
   const [isNotifMenuOpen, setIsNotifMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,20 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
     action?.();
     setIsMobileMenuOpen(false);
   };
+
+  // Effect for scroll handling
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -170,11 +185,11 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onLoginClick, on
 
   return (
     <>
-      <header className="bg-white shadow-md sticky top-0 z-20">
-        <div className="container mx-auto px-4 md:px-8 py-3 flex justify-between items-center gap-4">
+      <header className="bg-white shadow-md sticky top-0 z-20 transition-all duration-300">
+        <div className={`container mx-auto px-4 md:px-8 flex justify-between items-center gap-4 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-3'}`}>
           <button onClick={onHomeClick} className="flex items-center gap-3 cursor-pointer flex-shrink-0">
-            <HomeIcon className="w-8 h-8 text-primary" />
-            <h1 className="text-2xl font-bold text-neutral-900 hidden sm:block">RentEase</h1>
+            <HomeIcon className={`text-primary transition-all duration-300 ${isScrolled ? 'w-7 h-7' : 'w-8 h-8'}`} />
+            <h1 className={`font-bold text-neutral-900 hidden sm:block transition-all duration-300 ${isScrolled ? 'text-xl' : 'text-2xl'}`}>RentEase</h1>
           </button>
 
           {/* Search Bar - Desktop */}

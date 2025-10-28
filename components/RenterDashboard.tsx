@@ -177,13 +177,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
         return users.filter(u => u.id === user.id || ownerIds.has(u.id));
     }, [users, activeAgreements, user.id]);
 
-    const allBillableItems = useMemo(() => {
-        // This logic combines utility bills and rent/deposit applications into a single list for display
-        const billItems = bills.map(bill => {
-            const property = properties.find(p => p.id === bill.propertyId);
-            return { id: `bill-${bill.id}`, type: 'bill' as const, title: `${bill.type.charAt(0) + bill.type.slice(1).toLowerCase()} Bill`, propertyTitle: property?.title || 'N/A', amount: bill.amount, status: bill.isPaid ? 'Paid' as const : 'Unpaid' as const, date: bill.isPaid ? bill.paidOn! : bill.dueDate, rawDate: new Date(bill.isPaid ? bill.paidOn! : bill.dueDate), data: bill };
-        });
-
+    const rentBillableItems = useMemo(() => {
         const applicationItems = applications.map(({ application, property }) => {
             let item = null;
             if ([ApplicationStatus.RENT_DUE, ApplicationStatus.RENT_PAID, ApplicationStatus.OFFLINE_PAYMENT_PENDING].includes(application.status)) {
@@ -194,16 +188,30 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             }
             return item;
         }).filter((item): item is NonNullable<typeof item> => item !== null);
-
-        const combined = [...billItems, ...applicationItems];
-        const unpaid = combined.filter(item => item.status === 'Unpaid' || item.status === 'Pending');
-        const paid = combined.filter(item => item.status === 'Paid');
+        
+        const unpaid = applicationItems.filter(item => item.status === 'Unpaid' || item.status === 'Pending');
+        const paid = applicationItems.filter(item => item.status === 'Paid');
         
         unpaid.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
         paid.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
 
         return [...unpaid, ...paid];
-    }, [bills, applications, properties]);
+    }, [applications, properties]);
+
+    const utilityBillItems = useMemo(() => {
+        const billItems = bills.map(bill => {
+            const property = properties.find(p => p.id === bill.propertyId);
+            return { id: `bill-${bill.id}`, type: 'bill' as const, title: `${bill.type.charAt(0) + bill.type.slice(1).toLowerCase()} Bill`, propertyTitle: property?.title || 'N/A', amount: bill.amount, status: bill.isPaid ? 'Paid' as const : 'Unpaid' as const, date: bill.isPaid ? bill.paidOn! : bill.dueDate, rawDate: new Date(bill.isPaid ? bill.paidOn! : bill.dueDate), data: bill };
+        });
+        
+        const unpaid = billItems.filter(item => item.status === 'Unpaid');
+        const paid = billItems.filter(item => item.status === 'Paid');
+
+        unpaid.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+        paid.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+        
+        return [...unpaid, ...paid];
+    }, [bills, properties]);
     
     const actionItems = useMemo(() => {
         const items = [];
@@ -215,16 +223,17 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
                 items.push({ id: `sign-${agreement.id}`, text: `Sign agreement for "${property.title}"`, action: () => onSignAgreement(agreement, property), icon: <Icons.PencilIcon className="w-5 h-5 text-blue-600"/> });
             }
         });
-        allBillableItems.filter(i => i.status === 'Unpaid').slice(0, 2).forEach(item => {
-            items.push({ id: `pay-${item.id}`, text: `Pay ${item.title.toLowerCase()} of ₹${item.amount.toLocaleString()}`, action: () => {
+        const unpaidItems = [...rentBillableItems, ...utilityBillItems].filter(i => i.status === 'Unpaid');
+        unpaidItems.slice(0, 2).forEach(item => {
+             items.push({ id: `pay-${item.id}`, text: `Pay ${item.title.toLowerCase()} of ₹${item.amount.toLocaleString()}`, action: () => {
                  if (item.type === 'bill') onPayBill((item.data as Bill).id);
                  else onInitiatePaymentFlow((item.data as any).application, (item.data as any).property);
             }, icon: <Icons.BanknotesIcon className="w-5 h-5 text-red-600"/> });
         });
         return items;
-    }, [user.kycStatus, agreements, allBillableItems, onTabChange, onSignAgreement, onPayBill, onInitiatePaymentFlow]);
+    }, [user.kycStatus, agreements, rentBillableItems, utilityBillItems, onTabChange, onSignAgreement, onPayBill, onInitiatePaymentFlow]);
 
-    const { filteredBillableItems, BillCard, BillFilterButton } = useMemo(() => {
+    const { BillCard } = useMemo(() => {
         const getBillIcon = (type: BillType | 'RENT' | 'DEPOSIT') => {
             switch (type) {
                 case BillType.ELECTRICITY:
@@ -253,20 +262,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             return <span className={`px-2 py-1 text-xs font-bold rounded-full ${info.color}`}>{info.text}</span>;
         };
 
-        const BillFilterButton: React.FC<{ filter: 'all' | 'utilities' | 'rent'; label: string }> = ({ filter, label }) => (
-            <button
-                onClick={() => setBillFilter(filter)}
-                className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors ${
-                    billFilter === filter
-                        ? 'bg-primary text-white'
-                        : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-                }`}
-            >
-                {label}
-            </button>
-        );
-
-        const BillCard: React.FC<{ item: (typeof allBillableItems)[0] }> = ({ item }) => {
+        const BillCard: React.FC<{ item: (typeof utilityBillItems)[0] | (typeof rentBillableItems)[0] }> = ({ item }) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const itemDueDate = new Date(item.rawDate);
@@ -330,17 +326,8 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             );
         };
 
-        return {
-            filteredBillableItems: (() => {
-                if (billFilter === 'all') return allBillableItems;
-                if (billFilter === 'utilities') return allBillableItems.filter(item => item.type === 'bill');
-                if (billFilter === 'rent') return allBillableItems.filter(item => item.type === 'rent' || item.type === 'deposit');
-                return [];
-            })(),
-            BillCard,
-            BillFilterButton,
-        };
-    }, [billFilter, allBillableItems, onPayBill, onInitiatePaymentFlow, recentlyPaidApplicationId, onClearRecentlyPaid]);
+        return { BillCard };
+    }, [onPayBill, onInitiatePaymentFlow, recentlyPaidApplicationId, onClearRecentlyPaid]);
 
     const handleReviewSubmit = (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => {
         onLeaveReview(agreementId, reviewData);
@@ -356,7 +343,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard icon={<Icons.ShieldCheckIcon className="w-6 h-6 text-blue-800"/>} title="Verification Status" value={<KycStatusBadge status={user.kycStatus} large />} color="bg-blue-100" />
-                <StatCard icon={<Icons.BanknotesIcon className="w-6 h-6 text-red-800"/>} title="Upcoming Payments" value={allBillableItems.filter(i => i.status === 'Unpaid' || i.status === 'Pending').length} color="bg-red-100" />
+                <StatCard icon={<Icons.BanknotesIcon className="w-6 h-6 text-red-800"/>} title="Upcoming Payments" value={[...rentBillableItems, ...utilityBillItems].filter(i => i.status === 'Unpaid' || i.status === 'Pending').length} color="bg-red-100" />
                 <StatCard icon={<Icons.DocumentCheckIcon className="w-6 h-6 text-green-800"/>} title="Active Rentals" value={activeAgreements.length} color="bg-green-100" />
                 <StatCard icon={<Icons.PencilIcon className="w-6 h-6 text-indigo-800"/>} title="Pending Agreements" value={pendingAgreementSignatures} color="bg-indigo-100" />
             </div>
@@ -375,10 +362,10 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
                 </div>
             )}
 
-            {allBillableItems.filter(i => i.status === 'Unpaid').length > 0 && (
+            {[...rentBillableItems, ...utilityBillItems].filter(i => i.status === 'Unpaid').length > 0 && (
                  <div className="bg-white p-6 rounded-lg shadow-md border">
                     <h3 className="text-xl font-semibold text-neutral-800 mb-4 flex items-center gap-2"><Icons.CalendarDaysIcon className="w-6 h-6 text-blue-500"/> Upcoming Payments</h3>
-                    <div className="space-y-4">{allBillableItems.filter(item => item.status === 'Unpaid').slice(0,3).map(item => <BillCard key={item.id} item={item} />)}</div>
+                    <div className="space-y-4">{[...rentBillableItems, ...utilityBillItems].filter(item => item.status === 'Unpaid').slice(0,3).map(item => <BillCard key={item.id} item={item} />)}</div>
                 </div>
             )}
         </div>
@@ -618,35 +605,50 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
         </div>
     );
 
-    const renderBillsAndPayments = () => (
+    const renderUtilityBills = () => (
         <div className="bg-white p-6 rounded-lg shadow-md border">
             <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
-                <Icons.BanknotesIcon className="w-6 h-6 text-primary" />
-                Bills & Payments
+                <Icons.BoltIcon className="w-6 h-6 text-primary" />
+                Utility Bills
             </h3>
-            <p className="text-neutral-600 mb-6">Track and pay your rent, utilities, and other bills.</p>
-    
-            <div className="flex items-center gap-2 mb-6">
-                <BillFilterButton filter="all" label="All" />
-                <BillFilterButton filter="rent" label="Rent & Deposit" />
-                <BillFilterButton filter="utilities" label="Utilities" />
-            </div>
-    
-            {filteredBillableItems.length > 0 ? (
+            <p className="text-neutral-600 mb-6">Track and pay your electricity, water, and maintenance bills.</p>
+
+            {utilityBillItems.length > 0 ? (
                 <div className="space-y-4">
-                    {filteredBillableItems.map(item => (
-                        <BillCard key={item.id} item={item} />
-                    ))}
+                    {utilityBillItems.map(item => <BillCard key={item.id} item={item} />)}
                 </div>
             ) : (
                 <div className="text-center py-12">
                     <Icons.CheckCircleIcon className="w-12 h-12 mx-auto text-green-400" />
-                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">All Caught Up!</h3>
-                    <p className="mt-1 text-neutral-500">You have no pending bills.</p>
+                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Utility Bills</h3>
+                    <p className="mt-1 text-neutral-500">Your owner hasn't generated any utility bills yet.</p>
                 </div>
             )}
         </div>
     );
+
+    const renderRentPayments = () => (
+         <div className="bg-white p-6 rounded-lg shadow-md border">
+            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
+                <Icons.BanknotesIcon className="w-6 h-6 text-primary" />
+                Rent & Deposit Payments
+            </h3>
+            <p className="text-neutral-600 mb-6">Manage your monthly rent and security deposit payments.</p>
+
+            {rentBillableItems.length > 0 ? (
+                <div className="space-y-4">
+                    {rentBillableItems.map(item => <BillCard key={item.id} item={item} />)}
+                </div>
+            ) : (
+                <div className="text-center py-12">
+                    <Icons.CheckCircleIcon className="w-12 h-12 mx-auto text-green-400" />
+                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Rent Payments Due</h3>
+                    <p className="mt-1 text-neutral-500">Your rent payments will appear here as they become due.</p>
+                </div>
+            )}
+        </div>
+    );
+
 
     const renderPastRentals = () => {
         const pastAgreements = agreements.filter(a => new Date(a.agreement.endDate) < new Date());
@@ -731,7 +733,8 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             case 'viewings': return renderViewings();
             case 'saved': return renderSavedProperties();
             case 'myRentals': return renderMyRentals();
-            case 'bills': return renderBillsAndPayments();
+            case 'bills': return renderUtilityBills();
+            case 'rent': return renderRentPayments();
             case 'pastRentals': return renderPastRentals();
             case 'maintenance': return renderMaintenance();
             default: return renderOverview();
@@ -740,8 +743,9 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
     
     const sidebarOptions = [
         {id: "overview", label: "Overview", icon: <Icons.Squares2X2Icon className="w-5 h-5"/>, count: undefined},
-        {id: "myRentals", label: "My Rentals", icon: <Icons.DocumentTextIcon className="w-5 h-5"/>, count: pendingAgreementSignatures},
-        {id: "bills", label: "Bills & Payments", icon: <Icons.BanknotesIcon className="w-5 h-5"/>, count: allBillableItems.filter(i => i.status !== 'Paid').length},
+        {id: "myRentals", label: "Applications & Tenancy", icon: <Icons.DocumentTextIcon className="w-5 h-5"/>, count: pendingAgreementSignatures},
+        {id: "rent", label: "Rent Payments", icon: <Icons.BanknotesIcon className="w-5 h-5"/>, count: rentBillableItems.filter(i => i.status !== 'Paid').length},
+        {id: "bills", label: "Utility Bills", icon: <Icons.BoltIcon className="w-5 h-5"/>, count: bills.filter(b => !b.isPaid).length},
         {id: "maintenance", label: "Maintenance", icon: <Icons.ClipboardDocumentListIcon className="w-5 h-5"/>, count: maintenanceRequests.filter(t => t.status !== MaintenanceStatus.DONE).length},
         {id: "viewings", label: "My Viewings", icon: <Icons.CalendarDaysIcon className="w-5 h-5"/>, count: undefined},
         {id: "saved", label: "Saved Properties", icon: <Icons.HeartIcon className="w-5 h-5"/>, count: undefined},

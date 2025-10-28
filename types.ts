@@ -19,6 +19,7 @@ export interface User {
     accountNumber: string;
     ifscCode: string;
   };
+  upiId?: string;
   profilePictureUrl?: string;
   bio?: string;
   ownerCredit?: number;

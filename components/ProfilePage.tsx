@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { User } from '../types';
 import { UserRole, NotificationType } from '../types';
-import { PencilIcon, SaveIcon, MailIcon, PhoneIcon, UserCircleIcon, XCircleIcon } from './Icons';
+import { PencilIcon, SaveIcon, MailIcon, PhoneIcon, UserCircleIcon, XCircleIcon, BuildingLibraryIcon, QrCodeIcon } from './Icons';
 import ImageUploader from './ImageUploader';
 
 interface ProfilePageProps {
@@ -136,33 +136,49 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onBack
                 ) : (
                     <p className="text-neutral-700 whitespace-pre-wrap">{editedUser.bio || 'No bio provided.'}</p>
                 )}
-                 {user.role === UserRole.OWNER && (
-                    <div className="mt-6">
-                        <h3 className="text-xl font-bold mb-4">Bank Information</h3>
-                        {isEditing ? (
-                            <div className="space-y-4">
+                 <div className="mt-6">
+                    <h3 className="text-xl font-bold mb-4">Payment Details</h3>
+                    <p className="text-xs text-neutral-500 mb-4">
+                        {user.role === UserRole.OWNER 
+                            ? "Your bank account is used for receiving rent payments from tenants." 
+                            : "Your bank account is used for receiving refunds (e.g., security deposit)."}
+                    </p>
+                    {isEditing ? (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium">Account Holder Name</label>
+                                <input type="text" name="accountHolder" value={editedUser.bankInfo?.accountHolder || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium">Account Number</label>
+                                <input type="text" name="accountNumber" value={editedUser.bankInfo?.accountNumber || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium">IFSC Code</label>
+                                <input type="text" name="ifscCode" value={editedUser.bankInfo?.ifscCode || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium">UPI ID</label>
+                                <input type="text" name="upiId" value={editedUser.upiId || ''} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md" placeholder="yourname@upi" />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3 text-sm text-neutral-700">
+                            <div className="flex items-start gap-3">
+                                <BuildingLibraryIcon className="w-5 h-5 mt-1 text-neutral-500" />
                                 <div>
-                                    <label className="block text-sm font-medium">Account Holder Name</label>
-                                    <input type="text" name="accountHolder" value={editedUser.bankInfo?.accountHolder || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium">Account Number</label>
-                                    <input type="text" name="accountNumber" value={editedUser.bankInfo?.accountNumber || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium">IFSC Code</label>
-                                    <input type="text" name="ifscCode" value={editedUser.bankInfo?.ifscCode || ''} onChange={handleBankInfoChange} className="w-full mt-1 p-2 border rounded-md" />
+                                    <p><strong>Account Holder:</strong> {user.bankInfo?.accountHolder || 'N/A'}</p>
+                                    <p><strong>Account Number:</strong> {user.bankInfo?.accountNumber || 'N/A'}</p>
+                                    <p><strong>IFSC Code:</strong> {user.bankInfo?.ifscCode || 'N/A'}</p>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="space-y-2 text-sm text-neutral-700">
-                                <p><strong>Account Holder:</strong> {user.bankInfo?.accountHolder || 'N/A'}</p>
-                                <p><strong>Account Number:</strong> {user.bankInfo?.accountNumber || 'N/A'}</p>
-                                <p><strong>IFSC Code:</strong> {user.bankInfo?.ifscCode || 'N/A'}</p>
+                            <div className="flex items-center gap-3">
+                                <QrCodeIcon className="w-5 h-5 text-neutral-500" />
+                                <p><strong>UPI ID:</strong> {user.upiId || 'N/A'}</p>
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    )}
+                </div>
             </div>
             <div>
                 <h3 className="text-xl font-bold mb-4">Notification Preferences</h3>

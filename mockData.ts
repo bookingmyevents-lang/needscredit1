@@ -16,6 +16,12 @@ export const mockUsers: User[] = [
     phoneNumber: '9876543210',
     profilePictureUrl: 'https://i.pravatar.cc/150?u=renter@example.com',
     bio: 'Looking for a quiet and clean place to call home. I work in tech and enjoy hiking on weekends.',
+    bankInfo: {
+      accountHolder: '',
+      accountNumber: '',
+      ifscCode: '',
+    },
+    upiId: 'ravi.k@exampleupi',
     notificationPreferences: {
         [NotificationType.APPLICATION_STATUS_UPDATE]: true,
         [NotificationType.VIEWING_STATUS_UPDATE]: true,
@@ -41,6 +47,7 @@ export const mockUsers: User[] = [
     profilePictureUrl: 'https://i.pravatar.cc/150?u=owner@example.com',
     bio: 'Proud owner of several properties in Bhubaneswar. I aim to provide comfortable and well-maintained homes for my tenants.',
     ownerCredit: 0,
+    upiId: 'alice.w@exampleupi',
     notificationPreferences: {
         [NotificationType.NEW_VIEWING_REQUEST]: true,
         [NotificationType.APPLICATION_STATUS_UPDATE]: true,
@@ -111,7 +118,7 @@ export const mockProperties: Property[] = [
     ],
     reviewIds: ['review1', 'review2'],
     viewingAdvance: 500,
-    panoViewUrl: 'https://kuula.co/share/collection/7qV94?logo=1&info=1&fs=1&vr=0&sd=1&thumbs=1',
+    panoViewUrl: 'https://kuula.co/share/5Jgq2/collection/79Y79?logo=0&info=0&fs=1&vr=1&sd=1&thumbs=1',
   },
   {
     id: 'prop2',
