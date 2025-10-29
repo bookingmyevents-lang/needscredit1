@@ -128,6 +128,7 @@ export enum PaymentType {
     REFUND = 'REFUND',
     BILL = 'BILL',
     PLATFORM_FEE = 'PLATFORM_FEE',
+    APPLICATION_FEE = 'APPLICATION_FEE',
 }
 
 export interface Payment {
@@ -361,4 +362,11 @@ export interface AiFilters {
     bathrooms?: number[];
     furnishing?: FurnishingStatus[];
     amenities?: string[];
+}
+
+export interface PlatformSettings {
+    platformFee: number;
+    serviceFeePercentage: number;
+    defaultViewingAdvance: number;
+    applicationFee: number;
 }

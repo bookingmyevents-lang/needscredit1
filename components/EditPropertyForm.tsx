@@ -28,6 +28,21 @@ const DepositButton: React.FC<{ label: string; isActive: boolean; onClick: () =>
     </button>
 );
 
+const FormInput: React.FC<{ id: string, name: string, label: string, type: string, value: string | number, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, placeholder?: string }> = ({ id, name, label, type, value, onChange, placeholder }) => (
+      <div>
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
+        <input 
+          type={type} 
+          id={id} 
+          name={name} 
+          value={value} 
+          onChange={onChange} 
+          placeholder={placeholder}
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+        />
+      </div>
+  );
+
 const EditPropertyForm: React.FC<EditPropertyFormProps> = ({ property, onSubmit, onCancel, onNavigateToHome, onNavigateToDashboard }) => {
   const [formData, setFormData] = useState<Property>(property);
   const [furnishingItems, setFurnishingItems] = useState<FurnishingItem[]>(property.furnishingItems || []);
@@ -204,20 +219,6 @@ const EditPropertyForm: React.FC<EditPropertyFormProps> = ({ property, onSubmit,
     { label: 'Edit' }
   ];
   
-  const FormInput = ({ id, name, label, type, value, onChange, placeholder }: { id: string, name: string, label: string, type: string, value: string | number, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, placeholder?: string }) => (
-      <div>
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
-        <input 
-          type={type} 
-          id={id} 
-          name={name} 
-          value={value} 
-          onChange={onChange} 
-          placeholder={placeholder}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-        />
-      </div>
-  );
 
   return (
     <div className="max-w-4xl mx-auto">

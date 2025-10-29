@@ -41,7 +41,7 @@ interface OwnerDashboardProps {
   onUpdateKycStatus: (userId: string, status: 'Verified' | 'Rejected') => void;
 }
 
-// Reusable components within the dashboard
+// Reusable components moved outside the main dashboard component to prevent re-declaration on every render.
 const SidebarButton: React.FC<{ id: string; label: string; count?: number; icon: React.ReactNode; activeTab: string; onTabChange: (tab: string) => void }> = ({ id, label, count, icon, activeTab, onTabChange }) => (
     <button
         onClick={() => onTabChange(id)}
@@ -68,8 +68,119 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: string |
     </div>
 );
 
-// ... Other card components (ViewingCard, ApplicationCard, etc.) would be defined here for cleanliness
-// For brevity in this refactor, they will remain inside the main component render logic.
+interface PropertiesTabContentProps {
+    properties: Property[];
+    propertiesWithTenants: {
+        property: Property;
+        tenant: User | null;
+        agreement: Agreement | undefined;
+    }[];
+    onPostPropertyClick: () => void;
+    onEditProperty: (property: Property) => void;
+    onMarkAsRented: (propertyId: string) => void;
+}
+
+const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties, propertiesWithTenants, onPostPropertyClick, onEditProperty, onMarkAsRented }) => {
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+
+    return (
+        <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-neutral-900">My Properties</h2>
+                    <p className="text-neutral-600">View and manage all your listed properties.</p>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center w-full sm:w-auto">
+                    <div className="p-1 bg-neutral-200 rounded-lg flex items-center">
+                        <button onClick={() => setViewMode('card')} className={`px-2 py-1 rounded-md text-sm font-semibold flex items-center gap-1 ${viewMode === 'card' ? 'bg-white shadow' : ''}`}><Icons.Squares2X2Icon className="w-4 h-4" /> Card</button>
+                        <button onClick={() => setViewMode('table')} className={`px-2 py-1 rounded-md text-sm font-semibold flex items-center gap-1 ${viewMode === 'table' ? 'bg-white shadow' : ''}`}><Icons.ListBulletIcon className="w-4 h-4" /> Table</button>
+                    </div>
+                    <button onClick={onPostPropertyClick} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition-colors duration-300">
+                        <Icons.PlusCircleIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+            {properties.length > 0 ? (
+                viewMode === 'card' ? (
+                    <div className="space-y-6">
+                        {properties.map((property) => (
+                            <div key={property.id} className="bg-white p-4 rounded-lg shadow-md border">
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-lg" />
+                                    <div className="flex-grow">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-xl font-bold">{property.title}</h3>
+                                                <p className="text-sm text-neutral-500">{property.address}</p>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded-full capitalize ${property.availability === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{property.availability}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm border-t pt-4">
+                                            <div><p className="font-semibold">Rent</p><p>₹{property.rent.toLocaleString()}</p></div>
+                                            <div><p className="font-semibold">Beds</p><p>{property.bedrooms}</p></div>
+                                            <div><p className="font-semibold">Baths</p><p>{property.bathrooms}</p></div>
+                                            <div><p className="font-semibold">Sq.Ft</p><p>{property.sqft.toLocaleString()}</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row justify-between items-start gap-4">
+                                    <div>
+                                        <h4 className="text-sm font-semibold">Current Tenant</h4>
+                                        {propertiesWithTenants.find(pwt => pwt.property.id === property.id)?.tenant ? (
+                                            <div className="flex items-center gap-3 mt-2">
+                                                <img src={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.profilePictureUrl} alt={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name} className="w-10 h-10 rounded-full" />
+                                                <div>
+                                                    <p className="font-medium">{propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name}</p>
+                                                </div>
+                                            </div>
+                                        ) : <p className="text-sm text-neutral-500 mt-2">Currently available for rent.</p>}
+                                    </div>
+                                    <div className="flex items-center gap-2 self-start sm:self-end w-full sm:w-auto">
+                                        <button onClick={() => onEditProperty(property)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/10 rounded-md">Edit</button>
+                                        {property.availability === 'available' && <button onClick={() => onMarkAsRented(property.id)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold bg-secondary text-white hover:bg-primary rounded-md">Mark as Rented</button>}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                     <div className="bg-white p-4 rounded-lg shadow-md border overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium w-2/5">Property</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium">Rent</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium">Status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium">Tenant</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {properties.map(property => {
+                                    const tenant = propertiesWithTenants.find(pwt => pwt.property.id === property.id)?.tenant;
+                                    return (
+                                        <tr key={property.id}>
+                                            <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap">{property.title}</td>
+                                            <td className="px-4 py-3 text-sm whitespace-nowrap">₹{property.rent.toLocaleString()}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`px-2 py-1 text-xs font-bold rounded-full capitalize ${property.availability === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{property.availability}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">{tenant?.name || 'N/A'}</td>
+                                            <td className="px-4 py-3 text-sm space-x-2 whitespace-nowrap">
+                                                <button onClick={() => onEditProperty(property)} className="font-semibold text-primary hover:underline">Edit</button>
+                                                {property.availability === 'available' && <button onClick={() => onMarkAsRented(property.id)} className="font-semibold text-secondary hover:underline">Mark Rented</button>}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )
+            ) : <p className="text-center py-16 text-neutral-500 text-lg">You haven't listed any properties yet.</p>}
+        </div>
+    )
+};
 
 // Main Component
 const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
@@ -357,108 +468,6 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
                  {(viewingRequests.length + rentalApplications.length) === 0 && <p className="text-center py-16 text-neutral-500 text-lg">You're all caught up!</p>}
             </div>
         );
-    };
-
-    const PropertiesTabContent: React.FC = () => {
-        const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-    
-        return (
-            <div className="space-y-8">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                        <h2 className="text-3xl font-bold text-neutral-900">My Properties</h2>
-                        <p className="text-neutral-600">View and manage all your listed properties.</p>
-                    </div>
-                    <div className="flex items-center gap-2 self-end sm:self-center w-full sm:w-auto">
-                        <div className="p-1 bg-neutral-200 rounded-lg flex items-center">
-                            <button onClick={() => setViewMode('card')} className={`px-2 py-1 rounded-md text-sm font-semibold flex items-center gap-1 ${viewMode === 'card' ? 'bg-white shadow' : ''}`}><Icons.Squares2X2Icon className="w-4 h-4" /> Card</button>
-                            <button onClick={() => setViewMode('table')} className={`px-2 py-1 rounded-md text-sm font-semibold flex items-center gap-1 ${viewMode === 'table' ? 'bg-white shadow' : ''}`}><Icons.ListBulletIcon className="w-4 h-4" /> Table</button>
-                        </div>
-                        <button onClick={handlers.onPostPropertyClick} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition-colors duration-300">
-                            <Icons.PlusCircleIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-                {properties.length > 0 ? (
-                    viewMode === 'card' ? (
-                        <div className="space-y-6">
-                            {properties.map((property) => (
-                                <div key={property.id} className="bg-white p-4 rounded-lg shadow-md border">
-                                    <div className="flex flex-col sm:flex-row gap-4">
-                                        <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-lg" />
-                                        <div className="flex-grow">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h3 className="text-xl font-bold">{property.title}</h3>
-                                                    <p className="text-sm text-neutral-500">{property.address}</p>
-                                                </div>
-                                                <span className={`px-2 py-1 text-xs font-bold rounded-full capitalize ${property.availability === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{property.availability}</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm border-t pt-4">
-                                                <div><p className="font-semibold">Rent</p><p>₹{property.rent.toLocaleString()}</p></div>
-                                                <div><p className="font-semibold">Beds</p><p>{property.bedrooms}</p></div>
-                                                <div><p className="font-semibold">Baths</p><p>{property.bathrooms}</p></div>
-                                                <div><p className="font-semibold">Sq.Ft</p><p>{property.sqft.toLocaleString()}</p></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row justify-between items-start gap-4">
-                                        <div>
-                                            <h4 className="text-sm font-semibold">Current Tenant</h4>
-                                            {propertiesWithTenants.find(pwt => pwt.property.id === property.id)?.tenant ? (
-                                                <div className="flex items-center gap-3 mt-2">
-                                                    <img src={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.profilePictureUrl} alt={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name} className="w-10 h-10 rounded-full" />
-                                                    <div>
-                                                        <p className="font-medium">{propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name}</p>
-                                                    </div>
-                                                </div>
-                                            ) : <p className="text-sm text-neutral-500 mt-2">Currently available for rent.</p>}
-                                        </div>
-                                        <div className="flex items-center gap-2 self-start sm:self-end w-full sm:w-auto">
-                                            <button onClick={() => handlers.onEditProperty(property)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/10 rounded-md">Edit</button>
-                                            {property.availability === 'available' && <button onClick={() => handlers.onMarkAsRented(property.id)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold bg-secondary text-white hover:bg-primary rounded-md">Mark as Rented</button>}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                         <div className="bg-white p-4 rounded-lg shadow-md border overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium w-2/5">Property</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium">Rent</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium">Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium">Tenant</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {properties.map(property => {
-                                        const tenant = propertiesWithTenants.find(pwt => pwt.property.id === property.id)?.tenant;
-                                        return (
-                                            <tr key={property.id}>
-                                                <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap">{property.title}</td>
-                                                <td className="px-4 py-3 text-sm whitespace-nowrap">₹{property.rent.toLocaleString()}</td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    <span className={`px-2 py-1 text-xs font-bold rounded-full capitalize ${property.availability === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{property.availability}</span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">{tenant?.name || 'N/A'}</td>
-                                                <td className="px-4 py-3 text-sm space-x-2 whitespace-nowrap">
-                                                    <button onClick={() => handlers.onEditProperty(property)} className="font-semibold text-primary hover:underline">Edit</button>
-                                                    {property.availability === 'available' && <button onClick={() => handlers.onMarkAsRented(property.id)} className="font-semibold text-secondary hover:underline">Mark Rented</button>}
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )
-                ) : <p className="text-center py-16 text-neutral-500 text-lg">You haven't listed any properties yet.</p>}
-            </div>
-        )
     };
     
     const renderBills = () => (
@@ -796,7 +805,7 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
         switch (activeTab) {
             case 'overview': return renderOverview();
             case 'actions': return renderActions();
-            case 'properties': return <PropertiesTabContent />;
+            case 'properties': return <PropertiesTabContent properties={properties} propertiesWithTenants={propertiesWithTenants} onPostPropertyClick={handlers.onPostPropertyClick} onEditProperty={handlers.onEditProperty} onMarkAsRented={handlers.onMarkAsRented} />;
             case 'onboarding': return renderOnboarding();
             case 'activeRentals': return renderActiveRentals();
             case 'bills': return renderBills();

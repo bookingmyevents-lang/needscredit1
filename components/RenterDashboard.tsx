@@ -112,7 +112,7 @@ const PaymentSuccessMessage: React.FC<{
 };
 
 
-// Reusable components within the dashboard
+// Reusable components moved outside the main component
 const SidebarButton: React.FC<{ id: string; label: string; count?: number; icon: React.ReactNode; activeTab: string; onTabChange: (tab: string) => void }> = ({ id, label, count, icon, activeTab, onTabChange }) => (
     <button
         onClick={() => onTabChange(id)}
@@ -149,6 +149,120 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: React.Re
         </div>
     </div>
 );
+
+const getBillIcon = (type: BillType | 'RENT' | 'DEPOSIT') => {
+    switch (type) {
+        case BillType.ELECTRICITY:
+            return <Icons.BoltIcon className="w-6 h-6 text-yellow-600" />;
+        case BillType.WATER:
+            return <Icons.WaterDropIcon className="w-6 h-6 text-blue-600" />;
+        case BillType.MAINTENANCE:
+            return <Icons.ClipboardDocumentListIcon className="w-6 h-6 text-gray-600" />;
+        case 'RENT':
+            return <Icons.BanknotesIcon className="w-6 h-6 text-green-600" />;
+        case 'DEPOSIT':
+            return <Icons.KeyIcon className="w-6 h-6 text-indigo-600" />;
+        default:
+            return <Icons.CreditCardIcon className="w-6 h-6 text-gray-500" />;
+    }
+};
+
+const getPaymentStatusBadge = (status: 'Paid' | 'Unpaid' | 'Pending' | 'Failed' | 'Refunded') => {
+    const statusInfo = {
+        Paid: { text: 'Paid', color: 'bg-green-100 text-green-800' },
+        Unpaid: { text: 'Unpaid', color: 'bg-red-100 text-red-800' },
+        Pending: { text: 'Owner Confirmation', color: 'bg-yellow-100 text-yellow-800' },
+        Failed: { text: 'Failed', color: 'bg-red-100 text-red-800' },
+        Refunded: { text: 'Refunded', color: 'bg-blue-100 text-blue-800' },
+    };
+    const info = statusInfo[status] || { text: status, color: 'bg-gray-100 text-gray-800' };
+    return <span className={`px-2 py-1 text-xs font-bold rounded-full ${info.color}`}>{info.text}</span>;
+};
+
+type BillCardItem = {
+    id: string;
+    type: 'bill' | 'rent' | 'deposit';
+    title: string;
+    propertyTitle: string;
+    amount: number;
+    status: 'Paid' | 'Unpaid' | 'Pending';
+    date: string;
+    rawDate: Date;
+    data: Bill | { application: Application; property: Property; };
+};
+
+interface BillCardProps {
+    item: BillCardItem;
+    onPayBill: (billId: string) => void;
+    onInitiatePaymentFlow: (application: Application, property: Property) => void;
+    recentlyPaidApplicationId: string | null;
+    onClearRecentlyPaid: () => void;
+}
+
+const BillCard: React.FC<BillCardProps> = ({ item, onPayBill, onInitiatePaymentFlow, recentlyPaidApplicationId, onClearRecentlyPaid }) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const itemDueDate = new Date(item.rawDate);
+    itemDueDate.setHours(0, 0, 0, 0);
+
+    const isOverdue = item.status === 'Unpaid' && itemDueDate < today;
+    const isRecentPayment = item.status === 'Paid' && item.id === recentlyPaidApplicationId;
+
+    const renderDateInfo = () => {
+        if (item.status === 'Paid') {
+            return <p className="text-xs text-neutral-500">Paid on {new Date(item.date).toLocaleDateString()}</p>;
+        }
+        if (item.status === 'Pending') {
+            return <p className="text-xs font-semibold text-yellow-600">Awaiting owner confirmation</p>;
+        }
+        if (isOverdue) {
+            return <p className="text-xs font-bold text-red-600">Overdue since {new Date(item.date).toLocaleDateString()}</p>;
+        }
+        return <p className="text-xs text-neutral-500">Due by {new Date(item.date).toLocaleDateString()}</p>;
+    };
+
+    return (
+        <div className="p-4 border rounded-lg flex flex-col sm:flex-row items-start gap-4">
+            <div className="p-2 bg-neutral-100 rounded-full">
+                {getBillIcon(item.type === 'bill' ? (item.data as Bill).type : item.type.toUpperCase() as 'RENT' | 'DEPOSIT')}
+            </div>
+            <div className="flex-grow">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h4 className="font-bold">{item.title}</h4>
+                        <p className="text-xs text-neutral-500">{item.propertyTitle}</p>
+                    </div>
+                    {getPaymentStatusBadge(item.status)}
+                </div>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mt-3 gap-2">
+                    <div>
+                        <p className="text-xl font-bold">₹{item.amount.toLocaleString()}</p>
+                        {renderDateInfo()}
+                    </div>
+                        {isRecentPayment ? (
+                        <PaymentSuccessMessage onComplete={onClearRecentlyPaid} size="small" message="Paid Successfully!" />
+                    ) : item.status === 'Unpaid' ? (
+                        <button
+                            onClick={() => {
+                                if (item.type === 'bill') {
+                                    onPayBill((item.data as Bill).id);
+                                } else {
+                                    const { application, property } = item.data as { application: Application, property: Property };
+                                    onInitiatePaymentFlow(application, property);
+                                }
+                            }}
+                            className={`px-4 py-2 text-white font-semibold rounded-md text-sm w-full sm:w-auto transition-colors ${
+                                isOverdue ? 'bg-red-600 hover:bg-red-700' : 'bg-secondary hover:bg-primary'
+                            }`}
+                        >
+                            Pay Now
+                        </button>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // Main Component
 const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
@@ -233,102 +347,6 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
         return items;
     }, [user.kycStatus, agreements, rentBillableItems, utilityBillItems, onTabChange, onSignAgreement, onPayBill, onInitiatePaymentFlow]);
 
-    const { BillCard } = useMemo(() => {
-        const getBillIcon = (type: BillType | 'RENT' | 'DEPOSIT') => {
-            switch (type) {
-                case BillType.ELECTRICITY:
-                    return <Icons.BoltIcon className="w-6 h-6 text-yellow-600" />;
-                case BillType.WATER:
-                    return <Icons.WaterDropIcon className="w-6 h-6 text-blue-600" />;
-                case BillType.MAINTENANCE:
-                    return <Icons.ClipboardDocumentListIcon className="w-6 h-6 text-gray-600" />;
-                case 'RENT':
-                    return <Icons.BanknotesIcon className="w-6 h-6 text-green-600" />;
-                case 'DEPOSIT':
-                    return <Icons.KeyIcon className="w-6 h-6 text-indigo-600" />;
-                default:
-                    return <Icons.CreditCardIcon className="w-6 h-6 text-gray-500" />;
-            }
-        };
-        const getPaymentStatusBadge = (status: 'Paid' | 'Unpaid' | 'Pending' | 'Failed' | 'Refunded') => {
-            const statusInfo = {
-                Paid: { text: 'Paid', color: 'bg-green-100 text-green-800' },
-                Unpaid: { text: 'Unpaid', color: 'bg-red-100 text-red-800' },
-                Pending: { text: 'Owner Confirmation', color: 'bg-yellow-100 text-yellow-800' },
-                Failed: { text: 'Failed', color: 'bg-red-100 text-red-800' },
-                Refunded: { text: 'Refunded', color: 'bg-blue-100 text-blue-800' },
-            };
-            const info = statusInfo[status] || { text: status, color: 'bg-gray-100 text-gray-800' };
-            return <span className={`px-2 py-1 text-xs font-bold rounded-full ${info.color}`}>{info.text}</span>;
-        };
-
-        const BillCard: React.FC<{ item: (typeof utilityBillItems)[0] | (typeof rentBillableItems)[0] }> = ({ item }) => {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const itemDueDate = new Date(item.rawDate);
-            itemDueDate.setHours(0, 0, 0, 0);
-
-            const isOverdue = item.status === 'Unpaid' && itemDueDate < today;
-            const isRecentPayment = item.status === 'Paid' && item.id === recentlyPaidApplicationId;
-
-            const renderDateInfo = () => {
-                if (item.status === 'Paid') {
-                    return <p className="text-xs text-neutral-500">Paid on {new Date(item.date).toLocaleDateString()}</p>;
-                }
-                if (item.status === 'Pending') {
-                    return <p className="text-xs font-semibold text-yellow-600">Awaiting owner confirmation</p>;
-                }
-                if (isOverdue) {
-                    return <p className="text-xs font-bold text-red-600">Overdue since {new Date(item.date).toLocaleDateString()}</p>;
-                }
-                return <p className="text-xs text-neutral-500">Due by {new Date(item.date).toLocaleDateString()}</p>;
-            };
-
-            return (
-                <div className="p-4 border rounded-lg flex flex-col sm:flex-row items-start gap-4">
-                    <div className="p-2 bg-neutral-100 rounded-full">
-                        {getBillIcon(item.type === 'bill' ? (item.data as Bill).type : item.type.toUpperCase() as 'RENT' | 'DEPOSIT')}
-                    </div>
-                    <div className="flex-grow">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h4 className="font-bold">{item.title}</h4>
-                                <p className="text-xs text-neutral-500">{item.propertyTitle}</p>
-                            </div>
-                            {getPaymentStatusBadge(item.status)}
-                        </div>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mt-3 gap-2">
-                            <div>
-                                <p className="text-xl font-bold">₹{item.amount.toLocaleString()}</p>
-                                {renderDateInfo()}
-                            </div>
-                             {isRecentPayment ? (
-                                <PaymentSuccessMessage onComplete={onClearRecentlyPaid} size="small" message="Paid Successfully!" />
-                            ) : item.status === 'Unpaid' ? (
-                                <button
-                                    onClick={() => {
-                                        if (item.type === 'bill') {
-                                            onPayBill((item.data as Bill).id);
-                                        } else {
-                                            onInitiatePaymentFlow((item.data as any).application, (item.data as any).property);
-                                        }
-                                    }}
-                                    className={`px-4 py-2 text-white font-semibold rounded-md text-sm w-full sm:w-auto transition-colors ${
-                                        isOverdue ? 'bg-red-600 hover:bg-red-700' : 'bg-secondary hover:bg-primary'
-                                    }`}
-                                >
-                                    Pay Now
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        return { BillCard };
-    }, [onPayBill, onInitiatePaymentFlow, recentlyPaidApplicationId, onClearRecentlyPaid]);
-
     const handleReviewSubmit = (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => {
         onLeaveReview(agreementId, reviewData);
         setReviewingAgreement(null);
@@ -365,7 +383,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
             {[...rentBillableItems, ...utilityBillItems].filter(i => i.status === 'Unpaid').length > 0 && (
                  <div className="bg-white p-6 rounded-lg shadow-md border">
                     <h3 className="text-xl font-semibold text-neutral-800 mb-4 flex items-center gap-2"><Icons.CalendarDaysIcon className="w-6 h-6 text-blue-500"/> Upcoming Payments</h3>
-                    <div className="space-y-4">{[...rentBillableItems, ...utilityBillItems].filter(item => item.status === 'Unpaid').slice(0,3).map(item => <BillCard key={item.id} item={item} />)}</div>
+                    <div className="space-y-4">{[...rentBillableItems, ...utilityBillItems].filter(item => item.status === 'Unpaid').slice(0,3).map(item => <BillCard key={item.id} item={item as BillCardItem} onPayBill={onPayBill} onInitiatePaymentFlow={onInitiatePaymentFlow} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={onClearRecentlyPaid}/>)}</div>
                 </div>
             )}
         </div>
@@ -615,7 +633,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
 
             {utilityBillItems.length > 0 ? (
                 <div className="space-y-4">
-                    {utilityBillItems.map(item => <BillCard key={item.id} item={item} />)}
+                    {utilityBillItems.map(item => <BillCard key={item.id} item={item as BillCardItem} onPayBill={onPayBill} onInitiatePaymentFlow={onInitiatePaymentFlow} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={onClearRecentlyPaid}/>)}
                 </div>
             ) : (
                 <div className="text-center py-12">
@@ -637,7 +655,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
 
             {rentBillableItems.length > 0 ? (
                 <div className="space-y-4">
-                    {rentBillableItems.map(item => <BillCard key={item.id} item={item} />)}
+                    {rentBillableItems.map(item => <BillCard key={item.id} item={item as BillCardItem} onPayBill={onPayBill} onInitiatePaymentFlow={onInitiatePaymentFlow} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={onClearRecentlyPaid}/>)}
                 </div>
             ) : (
                 <div className="text-center py-12">
@@ -688,7 +706,7 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
     const renderMaintenance = () => {
         const sortedRequests = [...maintenanceRequests].sort((a, b) => {
             if (requestSortBy === 'dueDate-asc') return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-            if (requestSortBy === 'dueDate-desc') return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+            if (requestSortBy === 'dueDate-desc') return new Date(b.dueDate).getTime() - new Date(a.createdAt).getTime();
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Default: newest first
         });
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, MaintenanceRequest, Review } from './types';
+import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, MaintenanceRequest, Review, PlatformSettings } from './types';
 import { UserRole, ApplicationStatus, FurnishingStatus, Facing, ViewingStatus, VerificationStatus, BillType, DisputeStatus, ActivityType, NotificationType, PaymentType, MaintenanceStatus, MaintenanceCategory } from './types';
 import { mockProperties, mockUsers, mockViewings, mockAgreements, mockVerifications, mockBills, mockDisputes, mockPayments, mockApplications, mockActivityLogs, mockMaintenanceRequests, mockReviews } from './mockData';
 import Header from './components/Header';
@@ -35,8 +35,8 @@ const odishaDistricts = [
 ];
 
 const USERS_STORAGE_KEY = 'rent-ease-users';
-const PLATFORM_FEE_AMOUNT = 500;
-const SERVICE_FEE_PERCENTAGE = 0.025; // 2.5%
+const SETTINGS_STORAGE_KEY = 'rent-ease-settings';
+
 
 const getDefaultNotificationPreferences = (role: UserRole) => {
     const allPreferences: Partial<Record<NotificationType, boolean>> = {};
@@ -71,6 +71,29 @@ const loadInitialUsers = (): User[] => {
     return usersWithPrefs;
 };
 
+const loadInitialSettings = (): PlatformSettings => {
+    try {
+        const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (typeof parsed.platformFee === 'number') {
+                return parsed;
+            }
+        }
+    } catch (error) {
+        console.error("Failed to process settings from localStorage", error);
+    }
+    // Fallback defaults
+    const defaultSettings = {
+        platformFee: 500,
+        serviceFeePercentage: 2.5,
+        defaultViewingAdvance: 500,
+        applicationFee: 250,
+    };
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(defaultSettings));
+    return defaultSettings;
+};
+
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -90,6 +113,7 @@ const App: React.FC = () => {
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>(mockMaintenanceRequests);
   const [savedProperties, setSavedProperties] = useState<string[]>([]);
   const [reviews, setReviews] = useState<Review[]>(mockReviews);
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(loadInitialSettings);
 
   // View state
   const [currentView, setCurrentView] = useState('home'); // home, login, browsing, propertyDetails, booking, dashboard, etc.
@@ -117,6 +141,8 @@ const App: React.FC = () => {
   const [finalizingAgreementDetails, setFinalizingAgreementDetails] = useState<{ application: Application; property: Property } | null>(null);
   const [bookingType, setBookingType] = useState<'viewing' | 'direct'>('viewing');
   const [recentlyPaidApplicationId, setRecentlyPaidApplicationId] = useState<string | null>(null);
+  const [pendingApplicationDetails, setPendingApplicationDetails] = useState<Application | null>(null);
+  const [payingApplicationFeeDetails, setPayingApplicationFeeDetails] = useState<{ property: Property } | null>(null);
 
   useEffect(() => {
     if (currentUser && currentUser.role === UserRole.RENTER) {
@@ -290,7 +316,7 @@ const App: React.FC = () => {
     
     // Cleanup on unmount
     return () => clearInterval(intervalId);
-  }, [generateRentCycleEvents]); // Run only once on mount
+  }, []); // Run only once on mount
 
   const addActivityLog = useCallback((type: ActivityType, message: string) => {
     if (!currentUser) return;
@@ -333,6 +359,12 @@ const App: React.FC = () => {
           setDashboardView('overview'); // Reset for next login
       }
   }
+
+  const handleUpdateSettings = (newSettings: PlatformSettings) => {
+    setPlatformSettings(newSettings);
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+    alert("Platform settings have been updated.");
+  };
 
   const handleLogin = (email: string, pass: string) => {
     const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
@@ -468,12 +500,18 @@ const App: React.FC = () => {
         status: ApplicationStatus.PENDING,
         documents: { idProof: null, incomeProof: null },
       };
-      setApplications(prev => [...prev, newApplication]);
-      addActivityLog(ActivityType.SUBMITTED_APPLICATION, `Submitted application for "${property.title}".`);
-      addNotification(property.ownerId, NotificationType.APPLICATION_STATUS_UPDATE, `${currentUser.name} has submitted an application for your property "${property.title}".`, property.id);
-      
-      setDashboardView('myRentals');
-      setCurrentView('dashboard');
+
+      if (platformSettings.applicationFee > 0) {
+        setPendingApplicationDetails(newApplication);
+        setPayingApplicationFeeDetails({ property });
+      } else {
+        setApplications(prev => [...prev, newApplication]);
+        addActivityLog(ActivityType.SUBMITTED_APPLICATION, `Submitted application for "${property.title}".`);
+        addNotification(property.ownerId, NotificationType.APPLICATION_STATUS_UPDATE, `${currentUser.name} has submitted an application for your property "${property.title}".`, property.id);
+        alert('Application submitted successfully!');
+        setDashboardView('myRentals');
+        setCurrentView('dashboard');
+      }
     }
   };
 
@@ -509,6 +547,42 @@ const App: React.FC = () => {
       setPendingViewingDetails(null);
   };
   
+  const handleApplicationFeePaymentSuccess = () => {
+    if (!pendingApplicationDetails || !payingApplicationFeeDetails || !currentUser) return;
+
+    const newPayment: Payment = {
+        id: `pay-appfee-${Date.now()}`,
+        userId: currentUser.id,
+        propertyId: pendingApplicationDetails.propertyId,
+        type: PaymentType.APPLICATION_FEE,
+        amount: platformSettings.applicationFee,
+        paymentDate: new Date().toISOString(),
+        status: 'Paid',
+    };
+    
+    const finalApplication: Application = {
+        ...pendingApplicationDetails,
+        paymentHistory: [newPayment]
+    };
+
+    setApplications(prev => [...prev, finalApplication]);
+    setPayments(prev => [...prev, newPayment]);
+    
+    addActivityLog(ActivityType.SUBMITTED_APPLICATION, `Submitted application for "${payingApplicationFeeDetails.property.title}".`);
+    const propertyOwnerId = properties.find(p => p.id === finalApplication.propertyId)?.ownerId;
+    if (propertyOwnerId) {
+        addNotification(propertyOwnerId, NotificationType.APPLICATION_STATUS_UPDATE, `${currentUser.name} has submitted an application for your property "${payingApplicationFeeDetails.property.title}".`, finalApplication.propertyId);
+    }
+    
+    alert('Application submitted successfully!');
+    setDashboardView('myRentals');
+    setCurrentView('dashboard');
+
+    // Cleanup
+    setPayingApplicationFeeDetails(null);
+    setPendingApplicationDetails(null);
+  };
+
   const handleUpdateViewingStatus = (viewingId: string, status: ViewingStatus) => {
     setViewings(prev => prev.map(v => v.id === viewingId ? { ...v, status } : v));
     const viewing = viewings.find(v => v.id === viewingId);
@@ -638,6 +712,8 @@ const App: React.FC = () => {
                             status: ApplicationStatus.DEPOSIT_DUE,
                             documents: { idProof: null, incomeProof: null },
                             amount: depositAndRentAmount,
+                            finalRentAmount: originalApp.finalRentAmount,
+                            finalDepositAmount: originalApp.finalDepositAmount,
                         };
                          setApplications(prevApps => [...prevApps, depositApplication]);
                          addNotification(originalApp.renterId, NotificationType.DEPOSIT_PAYMENT_DUE, `Your security deposit and first month's rent for "${properties.find(p=>p.id === originalApp.propertyId)?.title}" is now due.`, originalApp.propertyId);
@@ -702,6 +778,74 @@ const App: React.FC = () => {
     const otherPartyId = request.createdBy === currentUser.id ? request.assignedToId : request.createdBy;
     addNotification(otherPartyId, NotificationType.MAINTENANCE_STATUS_UPDATE, `${currentUser.name} commented on maintenance request: "${request.title}".`, request.propertyId);
   };
+  
+    const handleInitiatePaymentFlow = (application: Application, property: Property) => {
+        if (application.status === ApplicationStatus.DEPOSIT_DUE) {
+            setPayingRentDetails({ application, property });
+        } else if (application.status === ApplicationStatus.RENT_DUE) {
+            setPayingRentDetails({ application, property });
+        }
+    };
+    
+    const handleRentPaymentSuccess = (applicationId: string) => {
+        if(!currentUser) return;
+        const application = applications.find(a => a.id === applicationId);
+        if (!application) return;
+
+        const newPayment: Payment = {
+            id: `pay-${Date.now()}`,
+            userId: currentUser.id,
+            propertyId: application.propertyId,
+            type: application.status === ApplicationStatus.DEPOSIT_DUE ? PaymentType.DEPOSIT : PaymentType.RENT,
+            amount: application.amount!,
+            paymentDate: new Date().toISOString(),
+            status: 'Paid',
+        };
+
+        setPayments(prev => [...prev, newPayment]);
+
+        if(application.status === ApplicationStatus.DEPOSIT_DUE) {
+            setApplications(prev => prev.map(a => a.id === applicationId ? {...a, status: ApplicationStatus.DEPOSIT_PAID, paymentHistory: [...(a.paymentHistory || []), newPayment]} : a));
+            const originalAppId = applicationId.replace('deposit-', '');
+            setApplications(prev => prev.map(a => a.id === originalAppId ? {...a, status: ApplicationStatus.DEPOSIT_PAID} : a));
+        } else if (application.status === ApplicationStatus.RENT_DUE) {
+            setApplications(prev => prev.map(a => a.id === applicationId ? {...a, status: ApplicationStatus.RENT_PAID, paymentHistory: [...(a.paymentHistory || []), newPayment]} : a));
+            addActivityLog(ActivityType.PAID_RENT, `Paid rent of ₹${application.amount} for property.`);
+        }
+        setRecentlyPaidApplicationId(applicationId);
+    };
+
+    const handlePayBill = (bill: Bill) => {
+        const property = properties.find(p => p.id === bill.propertyId);
+        if (property) {
+            setPayingBillDetails({ bill, property });
+        }
+    };
+
+    const handleLeaveReview = (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => {
+        if (!currentUser) return;
+        const newReview: Review = {
+            id: `review-${Date.now()}`,
+            userId: currentUser.id,
+            author: currentUser.name,
+            role: 'Tenant',
+            time: 'Just now',
+            ...reviewData
+        };
+        setReviews(prev => [...prev, newReview]);
+
+        const agreement = agreements.find(a => a.id === agreementId);
+        if (agreement) {
+            const property = properties.find(p => p.id === agreement.propertyId);
+            if (property) {
+                setProperties(prev => prev.map(p => p.id === property.id ? { ...p, reviewIds: [...p.reviewIds, newReview.id] } : p));
+                addNotification(property.ownerId, NotificationType.NEW_REVIEW_RECEIVED, `${currentUser.name} left a review for your property "${property.title}".`, property.id);
+            }
+        }
+        
+        setAgreements(prev => prev.map(a => a.id === agreementId ? { ...a, reviewLeft: true } : a));
+    };
+
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -724,10 +868,10 @@ const App: React.FC = () => {
         {currentView === 'propertyDetails' && selectedProperty && <PropertyDetails properties={properties} users={users} reviews={reviews} property={selectedProperty} owner={users.find(u => u.id === selectedProperty.ownerId)} onBack={handleGoBackToList} onScheduleViewing={handleScheduleViewingRequest} onBookNow={handleDirectBookingRequest} onNavigateToHome={resetToHome} onNavigateToBrowsing={() => setCurrentView('browsing')} currentUser={currentUser} savedProperties={savedProperties} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} />}
         {currentView === 'booking' && selectedProperty && currentUser && <ApplicationForm property={selectedProperty} currentUser={currentUser} onSubmit={handleApplicationSubmit} onBack={() => setCurrentView('propertyDetails')} bookingType={bookingType}/>}
         {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.OWNER && <OwnerDashboard user={currentUser} properties={properties.filter(p => p.ownerId === currentUser.id)} viewings={viewings.filter(v => v.ownerId === currentUser.id).map(v => ({ viewing: v, tenant: users.find(u => u.id === v.tenantId)!, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => properties.some(p => p.id === a.propertyId && p.ownerId === currentUser.id)).map(app => ({ application: app, renter: users.find(u => u.id === app.renterId)!, property: properties.find(p => p.id === app.propertyId)! }))} agreements={agreements.filter(a => a.ownerId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} paymentHistory={payments.filter(p => properties.some(prop => prop.id === p.propertyId && prop.ownerId === currentUser.id)).map(p => ({ payment: p, tenantName: users.find(u => u.id === p.userId)?.name || 'Unknown', propertyTitle: properties.find(prop => prop.id === p.propertyId)?.title || 'N/A' }))} maintenanceRequests={maintenanceRequests.filter(req => properties.some(p => p.id === req.propertyId && p.ownerId === currentUser.id))} users={users} bills={bills.filter(b => properties.some(p => p.id === b.propertyId && p.ownerId === currentUser.id))} verifications={verifications} activeTab={dashboardView} onTabChange={setDashboardView} onUpdateViewingStatus={handleUpdateViewingStatus} onUpdateApplicationStatus={handleUpdateApplicationStatus} onEditProperty={handleEditProperty} onPostPropertyClick={() => { setIsPostingProperty(true); setCurrentView('postProperty'); }} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onPayPlatformFee={() => {}} onAcknowledgeOfflinePayment={() => {}} onMarkAsRented={() => {}} onInitiateFinalizeAgreement={handleInitiateFinalizeAgreement} onConfirmDepositPayment={()=>{}} onConfirmKeyHandover={()=>{}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onGenerateBill={()=>{}} onUpdateKycStatus={()=>{}} />}
-        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.RENTER && <RenterDashboard user={currentUser} agreements={agreements.filter(a => a.tenantId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} viewings={viewings.filter(v => v.tenantId === currentUser.id).map(v => ({ viewing: v, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => a.renterId === currentUser.id).map(a => ({ application: a, property: properties.find(p => p.id === a.propertyId)!}))} payments={payments.filter(p => p.userId === currentUser.id)} properties={properties} bills={bills.filter(b => b.tenantId === currentUser.id)} verification={verifications.find(v => v.tenantId === currentUser.id) || { id: '', tenantId: currentUser.id, status: VerificationStatus.NOT_SUBMITTED, formData: {}, submittedAt: '' }} maintenanceRequests={maintenanceRequests.filter(req => agreements.some(a => a.tenantId === currentUser.id && a.propertyId === req.propertyId))} users={users} savedProperties={properties.filter(p => savedProperties.includes(p.id))} activeTab={dashboardView} onTabChange={setDashboardView} onSubmitVerification={() => {}} onPayBill={() => {}} onRaiseDispute={() => {}} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onInitiatePaymentFlow={() => {}} onConfirmRent={() => {}} onCancelViewing={() => {}} onTenantReject={() => {}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} onBrowseClick={() => setCurrentView('browsing')} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={() => setRecentlyPaidApplicationId(null)} onLeaveReview={()=>{}} />}
-        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.SUPER_ADMIN && <SuperAdminDashboard properties={properties} applications={applications} users={users} disputes={disputes} activityLogs={activityLogs} payments={payments} viewings={viewings} onUpdateKycStatus={() => {}} onUpdateViewingStatus={()=>{}} onRefundViewingAdvance={()=>{}} currentUser={currentUser} onUpdateUserRole={()=>{}} />}
+        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.RENTER && <RenterDashboard user={currentUser} agreements={agreements.filter(a => a.tenantId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} viewings={viewings.filter(v => v.tenantId === currentUser.id).map(v => ({ viewing: v, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => a.renterId === currentUser.id).map(a => ({ application: a, property: properties.find(p => p.id === a.propertyId)!}))} payments={payments.filter(p => p.userId === currentUser.id)} properties={properties} bills={bills.filter(b => b.tenantId === currentUser.id)} verification={verifications.find(v => v.tenantId === currentUser.id) || { id: '', tenantId: currentUser.id, status: VerificationStatus.NOT_SUBMITTED, formData: {}, submittedAt: '' }} maintenanceRequests={maintenanceRequests.filter(req => agreements.some(a => a.tenantId === currentUser.id && a.propertyId === req.propertyId))} users={users} savedProperties={properties.filter(p => savedProperties.includes(p.id))} activeTab={dashboardView} onTabChange={setDashboardView} onSubmitVerification={() => {}} onPayBill={(billId) => { const bill = bills.find(b => b.id === billId); if (bill) handlePayBill(bill); }} onRaiseDispute={() => {}} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onInitiatePaymentFlow={handleInitiatePaymentFlow} onConfirmRent={() => {}} onCancelViewing={() => {}} onTenantReject={() => {}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} onBrowseClick={() => setCurrentView('browsing')} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={() => setRecentlyPaidApplicationId(null)} onLeaveReview={handleLeaveReview} />}
+        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.SUPER_ADMIN && <SuperAdminDashboard properties={properties} applications={applications} users={users} disputes={disputes} activityLogs={activityLogs} payments={payments} viewings={viewings} onUpdateKycStatus={() => {}} onUpdateViewingStatus={()=>{}} onRefundViewingAdvance={()=>{}} currentUser={currentUser} onUpdateUserRole={()=>{}} platformSettings={platformSettings} onUpdateSettings={handleUpdateSettings} />}
         {currentView === 'editProperty' && editingProperty && <EditPropertyForm property={editingProperty} onSubmit={handleUpdateProperty} onCancel={() => { setEditingProperty(null); setCurrentView('dashboard'); }} onNavigateToHome={resetToHome} onNavigateToDashboard={() => setCurrentView('dashboard')} />}
-        {currentView === 'postProperty' && isPostingProperty && <PostPropertyForm onSubmit={handlePostNewProperty} onCancel={() => { setIsPostingProperty(false); setCurrentView('dashboard'); }} />}
+        {currentView === 'postProperty' && isPostingProperty && <PostPropertyForm onSubmit={handlePostNewProperty} onCancel={() => { setIsPostingProperty(false); setCurrentView('dashboard'); }} platformSettings={platformSettings} />}
         {currentView === 'dashboard' && dashboardView === 'profile' && currentUser && <ProfilePage user={currentUser} onUpdateProfile={(u) => setUsers(prev => prev.map(user => user.id === u.id ? u : user))} onBack={() => setDashboardView('overview')} />}
         {currentView === 'dashboard' && dashboardView === 'activity' && currentUser && <ActivityLogPage activities={activityLogs.filter(log => log.userId === currentUser.id)} onBack={() => setDashboardView('overview')} />}
         {currentView === 'bookingConfirmation' && lastBookingDetails && <BookingConfirmation bookingDetails={lastBookingDetails} onGoToDashboard={() => { setDashboardView('viewings'); setCurrentView('dashboard'); }} onBrowseMore={() => setCurrentView('browsing')} />}
@@ -737,6 +881,55 @@ const App: React.FC = () => {
       {viewingAgreementDetails && <AgreementView agreement={viewingAgreementDetails.agreement} property={viewingAgreementDetails.property} renter={users.find(u=>u.id === viewingAgreementDetails.agreement.tenantId)!} owner={users.find(u=>u.id === viewingAgreementDetails.agreement.ownerId)!} isReadOnly={true} onClose={() => setViewingAgreementDetails(null)}/>}
       {signingAgreementDetails && currentUser && <AgreementSigningPage agreement={signingAgreementDetails.agreement} property={signingAgreementDetails.property} currentUser={currentUser} renter={users.find(u=>u.id === signingAgreementDetails.agreement.tenantId)!} owner={users.find(u=>u.id === signingAgreementDetails.agreement.ownerId)!} onInitiateSign={handleInitiateSign} onClose={() => setSigningAgreementDetails(null)}/>}
       {payingViewingAdvanceDetails && currentUser && <PaymentPortal currentUser={currentUser} paymentDetails={{ title: 'Viewing Advance Payment', amount: payingViewingAdvanceDetails.property.viewingAdvance, propertyTitle: payingViewingAdvanceDetails.property.title }} onPaymentSuccess={handleViewingPaymentSuccess} onClose={() => setPayingViewingAdvanceDetails(null)} paymentType={PaymentType.VIEWING_ADVANCE} />}
+      {payingApplicationFeeDetails && currentUser && <PaymentPortal currentUser={currentUser} paymentDetails={{ title: 'Application Fee', amount: platformSettings.applicationFee, propertyTitle: payingApplicationFeeDetails.property.title }} onPaymentSuccess={handleApplicationFeePaymentSuccess} onClose={() => setPayingApplicationFeeDetails(null)} paymentType={PaymentType.APPLICATION_FEE} />}
+      {payingRentDetails && currentUser && (
+          <PaymentPortal
+              currentUser={currentUser}
+              paymentDetails={{
+                  title: payingRentDetails.application.status === ApplicationStatus.DEPOSIT_DUE ? "Deposit & First Rent" : "Monthly Rent",
+                  amount: payingRentDetails.application.amount!,
+                  propertyTitle: payingRentDetails.property.title,
+                  ...(payingRentDetails.application.status === ApplicationStatus.DEPOSIT_DUE && {
+                      rentAmount: payingRentDetails.application.finalRentAmount,
+                      depositAmount: payingRentDetails.application.finalDepositAmount,
+                  })
+              }}
+              onPaymentSuccess={() => {
+                  handleRentPaymentSuccess(payingRentDetails.application.id);
+                  setPayingRentDetails(null);
+              }}
+              onClose={() => setPayingRentDetails(null)}
+              paymentType={payingRentDetails.application.status === ApplicationStatus.DEPOSIT_DUE ? PaymentType.DEPOSIT : PaymentType.RENT}
+          />
+      )}
+      {payingBillDetails && currentUser && (
+          <PaymentPortal
+              currentUser={currentUser}
+              paymentDetails={{
+                  title: `${payingBillDetails.bill.type} Bill`,
+                  amount: payingBillDetails.bill.amount,
+                  propertyTitle: payingBillDetails.property.title,
+                  dueDate: payingBillDetails.bill.dueDate,
+              }}
+              onPaymentSuccess={() => {
+                  const newPayment: Payment = {
+                      id: `pay-bill-${Date.now()}`,
+                      userId: currentUser.id,
+                      propertyId: payingBillDetails.bill.propertyId,
+                      type: PaymentType.BILL,
+                      amount: payingBillDetails.bill.amount,
+                      paymentDate: new Date().toISOString(),
+                      status: 'Paid',
+                  };
+                  setPayments(prev => [...prev, newPayment]);
+                  setBills(prev => prev.map(b => b.id === payingBillDetails.bill.id ? {...b, isPaid: true, paidOn: new Date().toISOString()} : b));
+                  addActivityLog(ActivityType.PAID_BILL, `Paid ${payingBillDetails.bill.type} bill of ₹${payingBillDetails.bill.amount}.`);
+                  setPayingBillDetails(null);
+              }}
+              onClose={() => setPayingBillDetails(null)}
+              paymentType={PaymentType.BILL}
+          />
+      )}
       {isSmartSearchOpen && <SmartSearchModal isOpen={isSmartSearchOpen} isLoading={isSmartSearchLoading} onClose={() => setIsSmartSearchOpen(false)} onSearch={() => {}} />}
       {otpVerificationDetails && <OtpVerificationModal isOpen={!!otpVerificationDetails} onClose={() => setOtpVerificationDetails(null)} onVerify={handleVerifyOtpAndSign} error={otpVerificationDetails.error} />}
       {finalizingAgreementDetails && <FinalizeAgreementForm details={finalizingAgreementDetails} onClose={() => setFinalizingAgreementDetails(null)} onSubmit={handleFinalizeAgreementSubmit} />}

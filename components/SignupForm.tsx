@@ -10,6 +10,42 @@ interface SignupFormProps {
   onBackToLogin: () => void;
 }
 
+const FormInput: React.FC<{
+    id: string;
+    label: string;
+    type: string;
+    placeholder?: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    error?: string;
+}> = ({ id, label, type, placeholder, value, onChange, error }) => (
+    <div>
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
+        <input
+            type={type}
+            id={id}
+            name={id}
+            value={value}
+            onChange={onChange}
+            className={`mt-1 block w-full px-3 py-2 border ${error ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
+            placeholder={placeholder}
+            required
+        />
+        {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+);
+
+const RoleSelector: React.FC<{ value: UserRole, label: string, selectedRole: UserRole, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }> = ({ value, label, selectedRole, onChange }) => {
+    const isSelected = selectedRole === value;
+    return (
+        <label className={`relative flex items-center justify-center p-3 border-2 rounded-md cursor-pointer transition-all ${isSelected ? 'bg-primary/10 border-primary text-primary' : 'border-gray-300 hover:border-gray-400'}`}>
+            <input type="radio" name="role" value={value} checked={isSelected} onChange={onChange} className="sr-only" />
+            <span className="text-sm font-semibold">{label}</span>
+            {isSelected && <CheckCircleIcon className="w-5 h-5 absolute top-2 right-2 text-primary" />}
+        </label>
+    );
+};
+
 const SignupForm: React.FC<SignupFormProps> = ({ users, onSignup, onBackToLogin }) => {
     const [formData, setFormData] = useState({
         name: '',
@@ -61,34 +97,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ users, onSignup, onBackToLogin 
         }
     };
     
-    const FormInput = ({ id, label, type, placeholder }: { id: keyof typeof formData, label: string, type: string, placeholder?: string }) => (
-         <div>
-            <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
-            <input 
-                type={type} 
-                id={id} 
-                name={id}
-                value={formData[id] as string}
-                onChange={handleChange}
-                className={`mt-1 block w-full px-3 py-2 border ${errors[id] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
-                placeholder={placeholder}
-                required
-            />
-            {errors[id] && <p className="text-red-500 text-xs mt-1">{errors[id]}</p>}
-        </div>
-    );
-
-    const RoleSelector: React.FC<{ value: UserRole, label: string }> = ({ value, label }) => {
-        const isSelected = formData.role === value;
-        return (
-            <label className={`relative flex items-center justify-center p-3 border-2 rounded-md cursor-pointer transition-all ${isSelected ? 'bg-primary/10 border-primary text-primary' : 'border-gray-300 hover:border-gray-400'}`}>
-                <input type="radio" name="role" value={value} checked={isSelected} onChange={handleRoleChange} className="sr-only" />
-                <span className="text-sm font-semibold">{label}</span>
-                {isSelected && <CheckCircleIcon className="w-5 h-5 absolute top-2 right-2 text-primary" />}
-            </label>
-        );
-    };
-
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <ImageUploader 
@@ -96,16 +104,16 @@ const SignupForm: React.FC<SignupFormProps> = ({ users, onSignup, onBackToLogin 
                 onImageSelect={(base64) => setFormData(prev => ({...prev, profilePictureUrl: base64}))}
                 size="small"
             />
-            <FormInput id="name" label="Full Name" type="text" placeholder="John Doe" />
-            <FormInput id="email" label="Email Address" type="email" placeholder="you@example.com" />
-            <FormInput id="password" label="Password" type="password" placeholder="••••••••" />
-            <FormInput id="confirmPassword" label="Confirm Password" type="password" placeholder="••••••••" />
+            <FormInput id="name" label="Full Name" type="text" placeholder="John Doe" value={formData.name} onChange={handleChange} error={errors.name} />
+            <FormInput id="email" label="Email Address" type="email" placeholder="you@example.com" value={formData.email} onChange={handleChange} error={errors.email} />
+            <FormInput id="password" label="Password" type="password" placeholder="••••••••" value={formData.password} onChange={handleChange} error={errors.password} />
+            <FormInput id="confirmPassword" label="Confirm Password" type="password" placeholder="••••••••" value={formData.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
             
             <div>
                 <label className="block text-sm font-medium text-gray-700">I am a...</label>
                 <div className="mt-2 grid grid-cols-2 gap-3">
-                    <RoleSelector value={UserRole.RENTER} label="Renter" />
-                    <RoleSelector value={UserRole.OWNER} label="Owner" />
+                    <RoleSelector value={UserRole.RENTER} label="Renter" selectedRole={formData.role} onChange={handleRoleChange} />
+                    <RoleSelector value={UserRole.OWNER} label="Owner" selectedRole={formData.role} onChange={handleRoleChange} />
                 </div>
             </div>
 

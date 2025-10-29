@@ -10,17 +10,17 @@ interface AmenitiesSelectorProps {
   onAmenityChange: (name: string, isChecked: boolean, icon: string) => void;
 }
 
+const IconComponent: React.FC<{ name: string }> = ({ name }) => {
+    const Icon = (Icons as any)[name] || Icons.CheckIcon;
+    return <Icon className="w-6 h-6 text-neutral-600" />;
+};
+
 const AmenitiesSelector: React.FC<AmenitiesSelectorProps> = ({
   selectedFurnishings,
   selectedAmenities,
   onFurnishingChange,
   onAmenityChange,
 }) => {
-  const IconComponent: React.FC<{ name: string }> = ({ name }) => {
-    const Icon = (Icons as any)[name] || Icons.CheckIcon;
-    return <Icon className="w-6 h-6 text-neutral-600" />;
-  };
-
   const selectedFurnishingMap = new Map(selectedFurnishings.map(item => [item.name, item.quantity]));
   const selectedAmenitySet = new Set(selectedAmenities.map(item => item.name));
 

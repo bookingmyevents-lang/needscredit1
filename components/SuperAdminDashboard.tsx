@@ -1,13 +1,14 @@
-
-
-
-import React, { useState, useMemo } from 'react';
-import type { Property, Application, User, Dispute, ActivityLog, Payment, Viewing } from '../types';
-import { ApplicationStatus, DisputeStatus, ActivityType, PaymentType, UserRole, ViewingStatus } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import type { Property, Viewing, User, Application, Agreement, Payment, MaintenanceRequest, Bill, Verification, PoliceVerificationFormData, PlatformSettings, Dispute, ActivityLog } from '../types';
+import { ViewingStatus, ApplicationStatus, PaymentType, MaintenanceStatus, BillType, VerificationStatus, UserRole, DisputeStatus } from '../types';
 import * as Icons from './Icons';
+import CreateMaintenanceRequestModal from './CreateMaintenanceRequestModal';
+import MaintenanceRequestCard from './MaintenanceRequestCard';
 import OnboardingTracker from './OnboardingTracker';
+import RentCycleTracker from './RentCycleTracker';
 
 
+// Component-specific props
 interface SuperAdminDashboardProps {
   properties: Property[];
   applications: Application[];
@@ -21,8 +22,11 @@ interface SuperAdminDashboardProps {
   onRefundViewingAdvance: (viewingId: string, reason: 'owner_declined' | 'tenant_rejected') => void;
   currentUser: User;
   onUpdateUserRole: (userId: string, role: UserRole) => void;
+  platformSettings: PlatformSettings;
+  onUpdateSettings: (settings: PlatformSettings) => void;
 }
 
+// Reusable components moved outside the main dashboard component to prevent re-declaration on every render.
 const SidebarButton: React.FC<{ id: string; label: string; count?: number; icon: React.ReactNode; activeTab: string; onTabChange: (tab: string) => void }> = ({ id, label, count, icon, activeTab, onTabChange }) => (
     <button
         onClick={() => onTabChange(id)}
@@ -49,13 +53,29 @@ const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: string |
     </div>
 );
 
+const FormField: React.FC<{ label: string; name: keyof PlatformSettings; value: number; helpText: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; }> = ({ label, name, value, helpText, onChange }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
+        <input
+            type="number"
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+        />
+        <p className="mt-1 text-xs text-gray-500">{helpText}</p>
+    </div>
+);
+
+
 type UserSortKey = 'name' | 'email' | 'kycStatus' | 'role';
 type PropertySortKey = 'title' | 'rent' | 'availability';
 type SortConfig<T> = { key: T; direction: 'ascending' | 'descending' };
 
 
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = (props) => {
-    const { properties, applications, users, disputes, activityLogs, payments, viewings, onUpdateKycStatus, onUpdateViewingStatus, onRefundViewingAdvance, currentUser, onUpdateUserRole } = props;
+    const { properties, applications, users, disputes, activityLogs, payments, viewings, onUpdateKycStatus, onUpdateViewingStatus, onRefundViewingAdvance, currentUser, onUpdateUserRole, platformSettings, onUpdateSettings } = props;
 
     const [activeTab, setActiveTab] = useState('overview');
     
@@ -71,6 +91,20 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = (props) => {
     const [expandedViewingId, setExpandedViewingId] = useState<string | null>(null);
     const [viewingFilter, setViewingFilter] = useState<string>('All');
 
+    // State for Settings tab
+    const [localSettings, setLocalSettings] = useState(platformSettings);
+    useEffect(() => {
+        setLocalSettings(platformSettings);
+    }, [platformSettings]);
+
+    const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setLocalSettings(prev => ({ ...prev, [name]: Number(value) }));
+    };
+
+    const handleSettingsSave = () => {
+        onUpdateSettings(localSettings);
+    };
 
     const totalEarnings = useMemo(() => payments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0), [payments]);
     const openDisputes = useMemo(() => disputes.filter(d => d.status === DisputeStatus.OPEN).length, [disputes]);
@@ -554,23 +588,142 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = (props) => {
         </div>
     );
     
+    const renderSettings = () => (
+        <div className="space-y-8">
+            <div>
+                <h2 className="text-3xl font-bold text-neutral-900">Masters / Platform Settings</h2>
+                <p className="text-neutral-600">Manage global fees and default values for the platform.</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow-md border max-w-2xl">
+                <div className="space-y-6">
+                    <FormField onChange={handleSettingsChange} label="Application Fee (₹)" name="applicationFee" value={localSettings.applicationFee} helpText="Fee charged to tenants for submitting a direct application." />
+                    <FormField onChange={handleSettingsChange} label="Default Viewing Advance (₹)" name="defaultViewingAdvance" value={localSettings.defaultViewingAdvance} helpText="The default advance payment amount when owners post a new property." />
+                    <FormField onChange={handleSettingsChange} label="Platform Fee (₹)" name="platformFee" value={localSettings.platformFee} helpText="A one-time fee charged to owners upon successful tenant onboarding." />
+                    <FormField onChange={handleSettingsChange} label="Service Fee (%)" name="serviceFeePercentage" value={localSettings.serviceFeePercentage} helpText="Percentage-based fee on transactions (not yet implemented)." />
+                </div>
+                <div className="mt-6 pt-6 border-t text-right">
+                    <button onClick={handleSettingsSave} className="px-6 py-2 bg-primary text-white font-semibold rounded-lg hover:bg-secondary">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+    
+    const renderAnalytics = () => {
+        const activeRentals = useMemo(() => properties.filter(p => p.availability === 'rented').length, [properties]);
+        const occupancyRate = useMemo(() => properties.length > 0 ? (activeRentals / properties.length) * 100 : 0, [activeRentals, properties]);
+
+        // Mock data for charts as we don't have historical data
+        const userGrowthData = useMemo(() => [
+            { month: 'Jan', users: Math.floor(users.length * 0.2) },
+            { month: 'Feb', users: Math.floor(users.length * 0.35) },
+            { month: 'Mar', users: Math.floor(users.length * 0.5) },
+            { month: 'Apr', users: Math.floor(users.length * 0.7) },
+            { month: 'May', users: Math.floor(users.length * 0.85) },
+            { month: 'Jun', users: users.length },
+        ], [users.length]);
+        const maxUserGrowth = Math.max(...userGrowthData.map(d => d.users), 1); // Avoid division by zero
+
+        const revenueByMonth = useMemo(() => {
+             const monthly: Record<string, number> = {};
+            payments.forEach(p => {
+                if (p.status === 'Paid') {
+                    const month = new Date(p.paymentDate).toLocaleString('default', { month: 'short' });
+                    monthly[month] = (monthly[month] || 0) + p.amount;
+                }
+            });
+
+            const fullRevenueData = [
+                { month: 'Jan', revenue: 120000 },
+                { month: 'Feb', revenue: 150000 },
+                { month: 'Mar', revenue: 135000 },
+                { month: 'Apr', revenue: 180000 },
+                { month: 'May', revenue: 210000 },
+                ...Object.entries(monthly).map(([month, revenue]) => ({ month, revenue })),
+            ];
+
+            const uniqueRevenueData = Array.from(new Map(fullRevenueData.map(item => [item.month, item])).values());
+            return uniqueRevenueData.slice(-6); // Last 6 months
+        }, [payments]);
+
+        const maxRevenue = Math.max(...revenueByMonth.map(d => d.revenue), 1); // Avoid division by zero
+
+        return (
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-3xl font-bold text-neutral-900">Platform Analytics</h2>
+                    <p className="text-neutral-600">Key metrics and performance over time.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <StatCard icon={<Icons.BanknotesIcon className="w-6 h-6 text-indigo-800"/>} title="Total Revenue" value={`₹${(totalEarnings / 1000).toFixed(1)}k`} color="bg-indigo-100" />
+                    <StatCard icon={<Icons.BuildingIcon className="w-6 h-6 text-green-800"/>} title="Active Rentals" value={activeRentals} color="bg-green-100" />
+                    <StatCard icon={<Icons.UserGroupIcon className="w-6 h-6 text-blue-800"/>} title="Total Users" value={users.length} color="bg-blue-100" />
+                    <StatCard icon={<Icons.ChartBarIcon className="w-6 h-6 text-teal-800"/>} title="Occupancy Rate" value={`${occupancyRate.toFixed(1)}%`} color="bg-teal-100" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* User Growth Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow-md border">
+                        <h3 className="text-xl font-semibold text-neutral-800 mb-4">User Growth (Last 6 Months)</h3>
+                        <div className="flex justify-around items-end h-64 border-l border-b border-gray-200 p-4">
+                            {userGrowthData.map(data => (
+                                <div key={data.month} className="flex flex-col items-center h-full justify-end w-1/6">
+                                    <div className="text-xs font-bold text-neutral-600">{data.users}</div>
+                                    <div
+                                        className="w-8 bg-primary rounded-t-md hover:bg-secondary transition-colors"
+                                        style={{ height: `${(data.users / maxUserGrowth) * 100}%` }}
+                                        title={`${data.month}: ${data.users} users`}
+                                    ></div>
+                                    <div className="text-sm font-semibold text-neutral-500 mt-2">{data.month}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Revenue Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow-md border">
+                        <h3 className="text-xl font-semibold text-neutral-800 mb-4">Revenue (Last 6 Months)</h3>
+                        <div className="flex justify-around items-end h-64 border-l border-b border-gray-200 p-4">
+                            {revenueByMonth.map(data => (
+                                <div key={data.month} className="flex flex-col items-center h-full justify-end w-1/6">
+                                    <div className="text-xs font-bold text-neutral-600">₹{(data.revenue / 1000).toFixed(0)}k</div>
+                                    <div
+                                        className="w-8 bg-green-500 rounded-t-md hover:bg-green-600 transition-colors"
+                                        style={{ height: `${(data.revenue / maxRevenue) * 100}%` }}
+                                        title={`${data.month}: ₹${data.revenue.toLocaleString()}`}
+                                    ></div>
+                                    <div className="text-sm font-semibold text-neutral-500 mt-2">{data.month}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const sidebarOptions = [
         {id: "overview", label: "Overview", icon: <Icons.Squares2X2Icon className="w-5 h-5"/>},
+        {id: "analytics", label: "Analytics", icon: <Icons.ChartBarIcon className="w-5 h-5"/>},
         {id: "users", label: "Users", icon: <Icons.UserGroupIcon className="w-5 h-5"/>, count: pendingKyc},
         {id: "properties", label: "Properties", icon: <Icons.BuildingIcon className="w-5 h-5"/>},
         {id: "applications", label: "Onboarding", icon: <Icons.DocumentTextIcon className="w-5 h-5"/>},
         {id: "viewings", label: "Viewings", icon: <Icons.CalendarDaysIcon className="w-5 h-5"/>, count: pendingViewingsCount},
         {id: "disputes", label: "Disputes", icon: <Icons.ExclamationTriangleIcon className="w-5 h-5"/>, count: openDisputes},
+        {id: "settings", label: "Masters", icon: <Icons.LayersIcon className="w-5 h-5"/>},
     ];
 
     const renderContent = () => {
         switch (activeTab) {
             case 'overview': return renderOverview();
+            case 'analytics': return renderAnalytics();
             case 'users': return renderUsers();
             case 'properties': return renderProperties();
             case 'applications': return renderApplications();
             case 'viewings': return renderViewings();
             case 'disputes': return renderDisputes();
+            case 'settings': return renderSettings();
             default: return renderOverview();
         }
     }
