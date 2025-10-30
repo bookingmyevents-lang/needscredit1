@@ -238,6 +238,10 @@ export interface Verification {
     status: VerificationStatus;
     formData: PoliceVerificationFormData;
     submittedAt: string;
+    documents?: {
+        idProofUrl?: string;
+        addressProofUrl?: string;
+    }
 }
 
 export enum BillType {

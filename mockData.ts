@@ -404,7 +404,11 @@ export const mockVerifications: Verification[] = [
             emergencyContactRelation: '',
             emergencyContactPhone: '',
         }, 
-        submittedAt: '' 
+        submittedAt: '',
+        documents: {
+            idProofUrl: undefined,
+            addressProofUrl: undefined,
+        },
     }
 ];
 

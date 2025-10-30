@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, MaintenanceRequest, Review } from '../types';
+import type { User, Agreement, Property, Viewing, Bill, Verification, Application, Payment, MaintenanceRequest, Review, PoliceVerificationFormData } from '../types';
 import { BillType, ApplicationStatus, PaymentType, ViewingStatus, MaintenanceStatus, VerificationStatus, UserRole } from '../types';
 import * as Icons from './Icons';
 import PoliceVerificationForm from './VerificationForm';
@@ -26,7 +26,7 @@ interface RenterDashboardProps {
   savedProperties: Property[];
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onSubmitVerification: (formData: Record<string, any>) => void;
+  onUpdateVerification: (verification: Verification) => void;
   onPayBill: (billId: string) => void;
   onRaiseDispute: (relatedId: string, type: 'Viewing' | 'Payment' | 'Property') => void;
   onViewAgreementDetails: (agreement: Agreement, property: Property) => void;
@@ -44,6 +44,7 @@ interface RenterDashboardProps {
   recentlyPaidApplicationId: string | null;
   onClearRecentlyPaid: () => void;
   onLeaveReview: (agreementId: string, reviewData: Omit<Review, 'id' | 'author' | 'role' | 'time' | 'userId'>) => void;
+  onSmartSearchClick: () => void;
 }
 
 interface WelcomeHomeMessageProps {
@@ -264,9 +265,69 @@ const BillCard: React.FC<BillCardProps> = ({ item, onPayBill, onInitiatePaymentF
     );
 };
 
+const DocumentUpload: React.FC<{
+    label: string;
+    documentUrl?: string;
+    onUpload: (file: File) => void;
+    onRemove: () => void;
+}> = ({ label, documentUrl, onUpload, onRemove }) => {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                alert("File size should not exceed 2MB.");
+                return;
+            }
+            onUpload(file);
+        }
+    };
+
+    return (
+        <div className="p-4 border border-gray-200 rounded-lg bg-neutral-50 h-full flex flex-col justify-between">
+            <div>
+                <p className="font-semibold text-neutral-800">{label}</p>
+                <p className="text-xs text-neutral-500 mb-4">Max file size: 2MB. (PNG, JPG, PDF)</p>
+            </div>
+            {documentUrl ? (
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-2 border rounded-md bg-white">
+                        <Icons.DocumentCheckIcon className="w-6 h-6 text-green-500 flex-shrink-0" />
+                        <p className="text-sm text-neutral-700 truncate flex-grow">
+                            {documentUrl.startsWith('data:image') ? 'Image uploaded' : 'PDF document uploaded'}
+                        </p>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <button onClick={() => inputRef.current?.click()} type="button" className="text-xs font-semibold text-primary hover:underline">Replace</button>
+                        <span className="text-gray-300">|</span>
+                        <button onClick={onRemove} type="button" className="text-xs font-semibold text-red-600 hover:underline">Remove</button>
+                    </div>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 hover:border-primary text-primary font-semibold rounded-md transition-colors"
+                >
+                    <Icons.UploadIcon className="w-5 h-5" />
+                    Upload File
+                </button>
+            )}
+            <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                accept="image/png, image/jpeg, application/pdf"
+                onChange={handleFileSelect}
+            />
+        </div>
+    );
+};
+
 // Main Component
 const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
-    const { user, agreements, viewings, applications, payments, properties, bills, verification, maintenanceRequests, users, savedProperties, activeTab, onTabChange, onSubmitVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onTenantReject, onAddMaintenanceRequest, onUpdateMaintenanceStatus, onAddMaintenanceComment, onToggleSaveProperty, onSelectProperty, onBrowseClick, recentlyPaidApplicationId, onClearRecentlyPaid, onLeaveReview } = props;
+    const { user, agreements, viewings, applications, payments, properties, bills, verification, maintenanceRequests, users, savedProperties, activeTab, onTabChange, onUpdateVerification, onPayBill, onRaiseDispute, onViewAgreementDetails, onSignAgreement, onInitiatePaymentFlow, onConfirmRent, onCancelViewing, onTenantReject, onAddMaintenanceRequest, onUpdateMaintenanceStatus, onAddMaintenanceComment, onToggleSaveProperty, onSelectProperty, onBrowseClick, recentlyPaidApplicationId, onClearRecentlyPaid, onLeaveReview, onSmartSearchClick } = props;
 
     // ... State and Memos ...
     const [paymentFilterType, setPaymentFilterType] = useState('');
@@ -389,40 +450,103 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
         </div>
     );
     
-    const renderVerification = () => (
-        <div className="bg-white p-6 rounded-lg shadow-md border">
-            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
-                <Icons.ShieldCheckIcon className="w-6 h-6 text-primary"/>
-                Police Verification
-            </h3>
-            <p className="text-neutral-600 mb-6">Complete the background check form as required by local authorities. This information is shared securely with the property owner for verification purposes.</p>
-            
-            {verification.status === VerificationStatus.VERIFIED && (
-                <div className="p-6 bg-green-50 text-green-800 rounded-lg text-center flex items-center justify-center gap-2 border border-green-200">
-                    <Icons.CheckCircleIcon className="w-6 h-6" /> Your profile verification is complete and approved.
+    const renderVerification = () => {
+        const handleFileUpload = (file: File, docType: 'idProofUrl' | 'addressProofUrl') => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result as string;
+                const updatedVerification = {
+                    ...verification,
+                    documents: {
+                        ...(verification.documents || {}),
+                        [docType]: base64String,
+                    }
+                };
+                onUpdateVerification(updatedVerification);
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const handleFileRemove = (docType: 'idProofUrl' | 'addressProofUrl') => {
+            const updatedVerification = {
+                ...verification,
+                documents: {
+                    ...(verification.documents || {}),
+                    [docType]: undefined,
+                }
+            };
+            onUpdateVerification(updatedVerification);
+        };
+        
+        const handleSubmitForm = (formData: PoliceVerificationFormData) => {
+            onUpdateVerification({
+                ...verification,
+                formData,
+                status: VerificationStatus.PENDING,
+                submittedAt: new Date().toISOString()
+            });
+            alert('Verification form submitted successfully. The owner will review your details.');
+        };
+
+        return (
+            <div className="space-y-8">
+                 <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
+                        <Icons.UploadIcon className="w-6 h-6 text-primary"/>
+                        Upload Verification Documents
+                    </h3>
+                    <p className="text-neutral-600 mb-6">Upload your documents for faster KYC approval. This is required to sign agreements and rent properties.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <DocumentUpload
+                            label="ID Proof (Aadhaar, Passport, etc.)"
+                            documentUrl={verification.documents?.idProofUrl}
+                            onUpload={(file) => handleFileUpload(file, 'idProofUrl')}
+                            onRemove={() => handleFileRemove('idProofUrl')}
+                        />
+                        <DocumentUpload
+                            label="Address Proof (Utility Bill, etc.)"
+                            documentUrl={verification.documents?.addressProofUrl}
+                            onUpload={(file) => handleFileUpload(file, 'addressProofUrl')}
+                            onRemove={() => handleFileRemove('addressProofUrl')}
+                        />
+                    </div>
                 </div>
-            )}
-            {verification.status === VerificationStatus.PENDING && (
-                <div className="p-6 bg-yellow-50 text-yellow-800 rounded-lg text-center flex items-center justify-center gap-2 border border-yellow-200">
-                    <Icons.ClockIcon className="w-6 h-6" /> Your verification is under review by the property owner.
-                </div>
-            )}
-            {(verification.status === VerificationStatus.NOT_SUBMITTED || verification.status === VerificationStatus.REJECTED) && (
-                <>
-                    {verification.status === VerificationStatus.REJECTED && (
-                        <div className="p-4 mb-4 bg-red-50 text-red-800 rounded-lg border border-red-200">
-                            Your previous verification submission was rejected. Please review the details and resubmit.
+
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
+                        <Icons.ShieldCheckIcon className="w-6 h-6 text-primary"/>
+                        Police Verification Form
+                    </h3>
+                    <p className="text-neutral-600 mb-6">Complete the background check form as required by local authorities. This information is shared securely with the property owner for verification purposes.</p>
+                    
+                    {verification.status === VerificationStatus.VERIFIED && (
+                        <div className="p-6 bg-green-50 text-green-800 rounded-lg text-center flex items-center justify-center gap-2 border border-green-200">
+                            <Icons.CheckCircleIcon className="w-6 h-6" /> Your profile verification is complete and approved.
                         </div>
                     )}
-                    <PoliceVerificationForm 
-                        verification={verification}
-                        onSubmit={onSubmitVerification}
-                        user={user}
-                    />
-                </>
-            )}
-        </div>
-    );
+                    {verification.status === VerificationStatus.PENDING && (
+                        <div className="p-6 bg-yellow-50 text-yellow-800 rounded-lg text-center flex items-center justify-center gap-2 border border-yellow-200">
+                            <Icons.ClockIcon className="w-6 h-6" /> Your verification is under review by the property owner.
+                        </div>
+                    )}
+                    {(verification.status === VerificationStatus.NOT_SUBMITTED || verification.status === VerificationStatus.REJECTED) && (
+                        <>
+                            {verification.status === VerificationStatus.REJECTED && (
+                                <div className="p-4 mb-4 bg-red-50 text-red-800 rounded-lg border border-red-200">
+                                    Your previous verification submission was rejected. Please review the details and resubmit.
+                                </div>
+                            )}
+                            <PoliceVerificationForm 
+                                verification={verification}
+                                onSubmit={handleSubmitForm}
+                                user={user}
+                            />
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    };
     
     const renderViewings = () => {
         const sortedViewings = [...viewings].sort((a, b) => new Date(b.viewing.requestedAt).getTime() - new Date(a.viewing.requestedAt).getTime());
@@ -472,129 +596,258 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
                                                         <Icons.CheckCircleIcon className="w-5 h-5"/> I'm Interested
                                                     </button>
                                                     <button onClick={() => onTenantReject(viewing.id)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-sm transition-colors">
-                                                        <Icons.XCircleIcon className="w-5 h-5"/> Not Interested
+                                                        <Icons.XCircleIcon className="w-5 h-5" /> Not Interested
                                                     </button>
                                                 </div>
-                                                <p className="text-xs text-neutral-500 mt-2 text-center">If you're not interested, your viewing advance will be refunded.</p>
                                             </div>
-                                        ) : (
-                                            <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
-                                                {canCancel && (
-                                                    <button onClick={() => onCancelViewing(viewing.id)} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md text-xs">Cancel Viewing</button>
-                                                )}
-                                                <button onClick={() => onRaiseDispute(viewing.id, 'Viewing')} className="px-3 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-semibold rounded-md text-xs">Raise Dispute</button>
+                                        ) : canCancel ? (
+                                            <div className="mt-4 pt-4 border-t border-dashed flex justify-end">
+                                                <button onClick={() => onCancelViewing(viewing.id)} className="text-xs font-semibold text-red-600 hover:underline">Cancel Request</button>
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </div>
-                            );
+                            )
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-12">
+                     <div className="text-center py-12">
                         <Icons.CalendarDaysIcon className="w-12 h-12 mx-auto text-neutral-300" />
-                        <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Scheduled Viewings</h3>
-                        <p className="mt-1 text-neutral-500">When you request to see a property, it will appear here.</p>
+                        <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Viewings Scheduled</h3>
+                        <p className="mt-1 text-neutral-500">Your requested property viewings will appear here.</p>
+                        <button onClick={onBrowseClick} className="mt-4 px-6 py-2 bg-primary text-white font-bold rounded-lg">Browse Properties</button>
                     </div>
                 )}
+            </div>
+        )
+    };
+    
+     const renderApplicationsAndRentals = () => {
+        // Separate applications from active/past rentals (agreements)
+        const pureApplications = applications.filter(a => !agreements.some(agr => `agree-${a.application.id}` === agr.agreement.id));
+        
+        const sortedApplications = [...pureApplications].sort((a,b) => new Date(b.application.moveInDate).getTime() - new Date(a.application.moveInDate).getTime());
+        const sortedAgreements = [...agreements].sort((a,b) => new Date(b.agreement.startDate).getTime() - new Date(a.agreement.startDate).getTime());
+        
+        const getStatusDescription = (status: ApplicationStatus) => {
+            switch(status) {
+                case ApplicationStatus.PENDING: return "Your application is under review by the owner.";
+                case ApplicationStatus.APPROVED: return "Congratulations! Your application has been approved.";
+                case ApplicationStatus.REJECTED: return "Unfortunately, your application was not approved at this time.";
+                default: return "Status updated.";
+            }
+        };
+
+        const renderAgreementCard = (agreement: Agreement, property: Property) => {
+            const isFullySigned = agreement.signedByTenant && agreement.signedByOwner;
+            const isPast = new Date(agreement.endDate) < new Date();
+            
+            return (
+                <div key={agreement.id} className="p-4 border rounded-lg">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <img src={property.images[0]} alt={property.title} className="w-full sm:w-40 h-32 object-cover rounded-md" />
+                        <div className="flex-grow">
+                            <div className="flex justify-between items-start">
+                                <h4 className="font-bold">{property.title}</h4>
+                                {isPast ? <span className="px-2 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-800">Past Rental</span> : <span className="px-2 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">Active Rental</span>}
+                            </div>
+                            <p className="text-xs text-neutral-500">{property.address}</p>
+                            <p className="text-sm font-semibold mt-2">Rent: ₹{agreement.rentAmount.toLocaleString()}/month</p>
+                             <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
+                                 <div>
+                                     {!isFullySigned && !agreement.signedByTenant && <p className="text-sm font-semibold text-yellow-600">Action Required: Sign Agreement</p>}
+                                     {isFullySigned && !isPast && <p className="text-sm font-semibold text-green-600">Agreement Active</p>}
+                                 </div>
+                                 <div className="flex gap-2 self-end sm:self-center">
+                                     <button onClick={() => onViewAgreementDetails(agreement, property)} className="text-xs font-semibold text-primary hover:underline">View</button>
+                                     {!isFullySigned && !agreement.signedByTenant && <button onClick={() => onSignAgreement(agreement, property)} className="px-3 py-1 bg-secondary text-white font-semibold rounded-md text-xs">Sign Now</button>}
+                                     {isPast && !agreement.reviewLeft && <button onClick={() => setReviewingAgreement({agreement, property})} className="px-3 py-1 bg-yellow-400 text-black font-semibold rounded-md text-xs">Leave Review</button>}
+                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        return (
+            <div className="space-y-8">
+                 <div>
+                    <h2 className="text-3xl font-bold text-neutral-900">Applications & Rentals</h2>
+                    <p className="text-neutral-600">Track your applications and manage your active or past rentals.</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-xl font-semibold mb-4">Active & Past Rentals</h3>
+                    {sortedAgreements.length > 0 ? (
+                        <div className="space-y-4">{sortedAgreements.map(({agreement, property}) => renderAgreementCard(agreement, property))}</div>
+                    ) : <p className="text-center py-8 text-neutral-500">Your active and past rentals will appear here once an agreement is finalized.</p>}
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-xl font-semibold mb-4">Pending Applications</h3>
+                     {sortedApplications.length > 0 ? (
+                        <div className="space-y-4">
+                            {sortedApplications.map(({ application, property }) => (
+                                <div key={application.id} className="p-4 border rounded-lg">
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        <img src={property.images[0]} alt={property.title} className="w-full sm:w-40 h-32 object-cover rounded-md" />
+                                        <div className="flex-grow">
+                                            <h4 className="font-bold">{property.title}</h4>
+                                            <p className="text-xs text-neutral-500">{property.address}</p>
+                                            <div className="mt-3 pt-3 border-t">
+                                                 <OnboardingTracker status={application.status} />
+                                                 <p className="text-center text-sm mt-4">{getStatusDescription(application.status)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-center py-8 text-neutral-500">You have no pending applications.</p>}
+                </div>
             </div>
         );
     };
 
-    const renderMyRentals = () => {
-        const onboardingApplications = applications.filter(({ application }) => 
-            !application.id.startsWith('rent-') && 
-            !application.id.startsWith('deposit-') &&
-            application.status !== ApplicationStatus.REJECTED &&
-            application.status !== ApplicationStatus.COMPLETED &&
-            !agreements.some(a => `agree-${application.id}` === a.agreement.id)
-        );
-
-        const activeAndCompletedRentals = agreements;
+    const renderBillsAndPayments = () => {
+        const dueItems = useMemo(() => [...rentBillableItems, ...utilityBillItems].filter(item => item.status === 'Unpaid' || item.status === 'Pending').sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime()), [rentBillableItems, utilityBillItems]);
+        const paidItems = useMemo(() => [...rentBillableItems, ...utilityBillItems].filter(item => item.status === 'Paid').sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime()), [rentBillableItems, utilityBillItems]);
 
         return (
-            <div className="bg-white p-6 rounded-lg shadow-md border space-y-8">
+            <div className="space-y-8">
                 <div>
-                    <h3 className="text-2xl font-bold text-neutral-800 mb-4">My Active Rentals</h3>
-                    {activeAndCompletedRentals.length > 0 ? (
-                        <div className="space-y-8">
-                            {activeAndCompletedRentals.map(({ agreement, property }) => {
-                                const allPropertyApplications = applications
-                                    .filter(a => a.application.propertyId === property.id)
-                                    .map(a => a.application);
-
-                                return (
-                                <div key={agreement.id} className="p-6 border rounded-lg shadow-sm">
-                                    <div className="flex flex-col sm:flex-row gap-6 mb-4">
-                                        <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-md" />
-                                        <div className="flex-grow">
-                                            <h4 className="text-lg font-bold">{property.title}</h4>
-                                            <p className="text-xs text-neutral-500">{property.address}</p>
-                                            <p className="text-sm mt-2"><strong>Lease Term:</strong> {new Date(agreement.startDate).toLocaleDateString()} to {new Date(agreement.endDate).toLocaleDateString()}</p>
-                                            <p className="text-sm mt-1"><strong>Monthly Rent:</strong> ₹{agreement.rentAmount.toLocaleString()}</p>
-                                        </div>
-                                    </div>
-                                    <RentCycleTracker
-                                        agreement={agreement}
-                                        property={property}
-                                        applications={allPropertyApplications}
-                                        onPayNow={onInitiatePaymentFlow}
-                                        payments={payments}
-                                    />
-                                </div>
-                            )})}
-                        </div>
-                    ) : (
-                         <div className="text-center py-12">
-                            <Icons.HomeIcon className="w-12 h-12 mx-auto text-neutral-300" />
-                            <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Active Rentals</h3>
-                            <p className="mt-1 text-neutral-500">Your active rentals will appear here once the agreement is complete.</p>
-                         </div>
-                    )}
+                    <h2 className="text-3xl font-bold text-neutral-900">Bills & Payments</h2>
+                    <p className="text-neutral-600">Track all your rent, utility bills, and other payments.</p>
                 </div>
-                
-                <div className="pt-8 border-t">
-                     <h3 className="text-2xl font-bold text-neutral-800 mb-4">My Pending Applications</h3>
-                     {onboardingApplications.length > 0 ? (
-                        <div className="space-y-8">
-                             {onboardingApplications.map(({ application, property }) => {
-                                const effectiveStatus = applications.find(a => a.application.id === `deposit-${application.id}`)?.application.status || application.status;
-                                return (
-                                    <div key={application.id} className="p-6 border rounded-lg shadow-sm">
-                                        <div className="flex flex-col sm:flex-row gap-6 mb-4">
-                                            <img src={property.images[0]} alt={property.title} className="w-full sm:w-48 h-40 object-cover rounded-md" />
-                                            <div>
-                                                <h4 className="text-lg font-bold">{property.title}</h4>
-                                                <p className="text-xs text-neutral-500">{property.address}</p>
-                                            </div>
-                                        </div>
-                                        <OnboardingTracker status={effectiveStatus} />
-                                    </div>
-                                );
-                            })}
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-xl font-semibold mb-4">Upcoming & Due Payments</h3>
+                    <div className="space-y-4">
+                        {dueItems.length > 0 ? (
+                            dueItems.map(item => (
+                                <BillCard 
+                                    key={item.id} 
+                                    item={item} 
+                                    onPayBill={onPayBill} 
+                                    onInitiatePaymentFlow={onInitiatePaymentFlow}
+                                    recentlyPaidApplicationId={recentlyPaidApplicationId}
+                                    onClearRecentlyPaid={onClearRecentlyPaid}
+                                />
+                            ))
+                        ) : (
+                            <p className="text-center py-8 text-neutral-500">No upcoming payments. You're all caught up!</p>
+                        )}
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                    <h3 className="text-xl font-semibold mb-4">Payment History</h3>
+                    <div className="space-y-4">
+                        {paidItems.length > 0 ? (
+                            paidItems.map(item => (
+                                <BillCard 
+                                    key={item.id} 
+                                    item={item} 
+                                    onPayBill={onPayBill} 
+                                    onInitiatePaymentFlow={onInitiatePaymentFlow}
+                                    recentlyPaidApplicationId={recentlyPaidApplicationId}
+                                    onClearRecentlyPaid={onClearRecentlyPaid}
+                                />
+                            ))
+                        ) : (
+                            <p className="text-center py-8 text-neutral-500">No payment history found.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderMaintenance = () => {
+        const sortedRequests = useMemo(() => {
+            return [...maintenanceRequests]
+                .filter(req => {
+                    if (requestFilterStatus !== 'All' && req.status !== requestFilterStatus) return false;
+                    if (requestFilterProperty !== 'All' && req.propertyId !== requestFilterProperty) return false;
+                    return true;
+                })
+                .sort((a, b) => {
+                    const [key, direction] = requestSortBy.split('-');
+                    if (key === 'dueDate' || key === 'createdAt') {
+                        const timeA = new Date(a[key as 'dueDate' | 'createdAt']).getTime();
+                        const timeB = new Date(b[key as 'dueDate' | 'createdAt']).getTime();
+                        
+                        // Handle invalid dates by moving them to the end
+                        if (isNaN(timeA)) return 1;
+                        if (isNaN(timeB)) return -1;
+
+                        return direction === 'asc' ? timeA - timeB : timeB - timeA;
+                    }
+                    return 0;
+                });
+        }, [maintenanceRequests, requestSortBy, requestFilterStatus, requestFilterProperty]);
+
+        return (
+            <div className="space-y-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 className="text-3xl font-bold text-neutral-900">Maintenance Requests</h2>
+                        <p className="text-neutral-600">Track and manage maintenance tasks for your rented properties.</p>
+                    </div>
+                    <button onClick={() => setIsCreateRequestModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition-colors duration-300 w-full sm:w-auto" disabled={propertiesForMaintenance.length === 0}>
+                        <Icons.PlusCircleIcon className="w-5 h-5" /> Create New Request
+                    </button>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-md border">
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 pb-4 border-b">
+                         <div>
+                            <label className="text-xs">Sort By</label>
+                            <select value={requestSortBy} onChange={e => setRequestSortBy(e.target.value)} className="p-2 border rounded-md text-sm w-full">
+                                <option value="dueDate-asc">Due Date (Asc)</option>
+                                <option value="dueDate-desc">Due Date (Desc)</option>
+                                <option value="createdAt-desc">Newest</option>
+                            </select>
                         </div>
-                     ) : (
-                        <div className="text-center py-12">
-                            <Icons.DocumentTextIcon className="w-12 h-12 mx-auto text-neutral-300" />
-                            <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Pending Applications</h3>
-                            <button onClick={onBrowseClick} className="mt-4 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-md text-sm transition-colors duration-300">
-                                Find Your Next Home
-                            </button>
+                        <div>
+                            <label className="text-xs">Status</label>
+                            <select value={requestFilterStatus} onChange={e => setRequestFilterStatus(e.target.value as MaintenanceStatus | 'All')} className="p-2 border rounded-md text-sm w-full">
+                                <option value="All">All Statuses</option>
+                                {Object.values(MaintenanceStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
                         </div>
-                     )}
+                        <div>
+                            <label className="text-xs">Property</label>
+                            <select value={requestFilterProperty} onChange={e => setRequestFilterProperty(e.target.value)} className="p-2 border rounded-md text-sm w-full">
+                                <option value="All">All Properties</option>
+                                {propertiesForMaintenance.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        {maintenanceRequests.length > 0 ? (
+                            sortedRequests.map(req => (
+                                <MaintenanceRequestCard key={req.id} request={req} users={relevantUsersForMaintenance} properties={properties} currentUser={user} onUpdateStatus={onUpdateMaintenanceStatus} onAddComment={onAddMaintenanceComment} />
+                            ))
+                        ) : (
+                            <div className="text-center py-12">
+                                <Icons.ClipboardDocumentListIcon className="w-12 h-12 mx-auto text-neutral-300" />
+                                <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Maintenance Requests</h3>
+                                <p className="mt-1 text-neutral-500">You can create a maintenance request if you have an active rental.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         );
     };
 
     const renderSavedProperties = () => (
-        <div className="bg-white p-6 rounded-lg shadow-md border">
-            <h3 className="text-2xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
-                <Icons.HeartIcon className="w-6 h-6 text-primary" />
-                Saved Properties
-            </h3>
+        <div className="space-y-8">
+            <div>
+                <h2 className="text-3xl font-bold text-neutral-900">Saved Properties</h2>
+                <p className="text-neutral-600">Your favorite properties, all in one place.</p>
+            </div>
             {savedProperties.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-6">
                     {savedProperties.map(property => (
                         <PropertyCard
                             key={property.id}
@@ -608,192 +861,77 @@ const RenterDashboard: React.FC<RenterDashboardProps> = (props) => {
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-12">
+                <div className="text-center py-12 bg-white rounded-lg shadow-sm border">
                     <Icons.HeartIcon className="w-12 h-12 mx-auto text-neutral-300" />
                     <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Saved Properties</h3>
-                    <p className="mt-1 text-neutral-500">When you save a property, it will appear here.</p>
-                    <button
-                        onClick={onBrowseClick}
-                        className="mt-4 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-md text-sm transition-colors duration-300"
-                    >
-                        Start Browsing
+                    <p className="mt-1 text-neutral-500">Click the heart icon on a property to save it for later.</p>
+                    <button onClick={onBrowseClick} className="mt-4 px-6 py-2 bg-primary text-white font-bold rounded-lg">
+                        Browse Properties
                     </button>
                 </div>
             )}
         </div>
     );
-
-    const renderUtilityBills = () => (
-        <div className="bg-white p-6 rounded-lg shadow-md border">
-            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
-                <Icons.BoltIcon className="w-6 h-6 text-primary" />
-                Utility Bills
-            </h3>
-            <p className="text-neutral-600 mb-6">Track and pay your electricity, water, and maintenance bills.</p>
-
-            {utilityBillItems.length > 0 ? (
-                <div className="space-y-4">
-                    {utilityBillItems.map(item => <BillCard key={item.id} item={item as BillCardItem} onPayBill={onPayBill} onInitiatePaymentFlow={onInitiatePaymentFlow} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={onClearRecentlyPaid}/>)}
-                </div>
-            ) : (
-                <div className="text-center py-12">
-                    <Icons.CheckCircleIcon className="w-12 h-12 mx-auto text-green-400" />
-                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Utility Bills</h3>
-                    <p className="mt-1 text-neutral-500">Your owner hasn't generated any utility bills yet.</p>
-                </div>
-            )}
-        </div>
-    );
-
-    const renderRentPayments = () => (
-         <div className="bg-white p-6 rounded-lg shadow-md border">
-            <h3 className="text-2xl font-bold text-neutral-800 mb-2 flex items-center gap-2">
-                <Icons.BanknotesIcon className="w-6 h-6 text-primary" />
-                Rent & Deposit Payments
-            </h3>
-            <p className="text-neutral-600 mb-6">Manage your monthly rent and security deposit payments.</p>
-
-            {rentBillableItems.length > 0 ? (
-                <div className="space-y-4">
-                    {rentBillableItems.map(item => <BillCard key={item.id} item={item as BillCardItem} onPayBill={onPayBill} onInitiatePaymentFlow={onInitiatePaymentFlow} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={onClearRecentlyPaid}/>)}
-                </div>
-            ) : (
-                <div className="text-center py-12">
-                    <Icons.CheckCircleIcon className="w-12 h-12 mx-auto text-green-400" />
-                    <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Rent Payments Due</h3>
-                    <p className="mt-1 text-neutral-500">Your rent payments will appear here as they become due.</p>
-                </div>
-            )}
-        </div>
-    );
-
-
-    const renderPastRentals = () => {
-        const pastAgreements = agreements.filter(a => new Date(a.agreement.endDate) < new Date());
     
-        return (
-            <div className="bg-white p-6 rounded-lg shadow-md border">
-                <h3 className="text-2xl font-bold text-neutral-800 mb-4">Past Rentals</h3>
-                {pastAgreements.length > 0 ? (
-                    <div className="space-y-4">
-                        {pastAgreements.map(({ agreement, property }) => (
-                            <div key={agreement.id} className="p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4">
-                                <div>
-                                    <h4 className="font-bold">{property.title}</h4>
-                                    <p className="text-sm text-neutral-500">Lease Ended: {new Date(agreement.endDate).toLocaleDateString()}</p>
-                                </div>
-                                {agreement.reviewLeft ? (
-                                    <p className="text-sm font-semibold text-green-600 flex items-center gap-1"><Icons.CheckCircleIcon className="w-4 h-4"/> Review Submitted</p>
-                                ) : (
-                                    <button onClick={() => setReviewingAgreement({ agreement, property })} className="px-4 py-2 bg-secondary text-white font-semibold rounded-md text-sm">
-                                        Leave a Review
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-12 text-neutral-500">
-                        <Icons.ArrowLeftIcon className="w-12 h-12 mx-auto text-neutral-300" />
-                        <h3 className="mt-2 text-xl font-semibold text-neutral-700">No Past Rentals</h3>
-                        <p className="mt-1">Your completed rental agreements will appear here.</p>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const renderMaintenance = () => {
-        const sortedRequests = [...maintenanceRequests].sort((a, b) => {
-            if (requestSortBy === 'dueDate-asc') return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-            if (requestSortBy === 'dueDate-desc') return new Date(b.dueDate).getTime() - new Date(a.createdAt).getTime();
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Default: newest first
-        });
-
-        const filteredRequests = sortedRequests.filter(r => {
-            if (requestFilterStatus !== 'All' && r.status !== requestFilterStatus) return false;
-            if (requestFilterProperty !== 'All' && r.propertyId !== requestFilterProperty) return false;
-            if (requestFilterAssignee !== 'All' && r.assignedToId !== requestFilterAssignee) return false;
-            return true;
-        });
-
-        return (
-            <div className="space-y-8">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                        <h2 className="text-3xl font-bold text-neutral-900">Maintenance Requests</h2>
-                        <p className="text-neutral-600">Report issues and track maintenance for your property.</p>
-                    </div>
-                    <button onClick={() => setIsCreateRequestModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition-colors duration-300 w-full sm:w-auto">
-                        <Icons.PlusCircleIcon className="w-5 h-5" /> Create New Request
-                    </button>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b">
-                        <select value={requestFilterStatus} onChange={e => setRequestFilterStatus(e.target.value as any)} className="p-2 border rounded-md text-sm"><option value="All">All Statuses</option>{Object.values(MaintenanceStatus).map(s => <option key={s} value={s}>{s}</option>)}</select>
-                        <select value={requestFilterProperty} onChange={e => setRequestFilterProperty(e.target.value)} className="p-2 border rounded-md text-sm"><option value="All">All Properties</option>{propertiesForMaintenance.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select>
-                        <select value={requestSortBy} onChange={e => setRequestSortBy(e.target.value)} className="p-2 border rounded-md text-sm"><option value="createdAt-desc">Newest First</option><option value="dueDate-asc">Due Date (Asc)</option><option value="dueDate-desc">Due Date (Desc)</option></select>
-                     </div>
-                     <div className="space-y-4">
-                        {filteredRequests.length > 0 ? filteredRequests.map(req => (
-                            <MaintenanceRequestCard key={req.id} request={req} users={users} properties={properties} currentUser={user} onUpdateStatus={onUpdateMaintenanceStatus} onAddComment={onAddMaintenanceComment} />
-                        )) : <p className="text-center py-8 text-neutral-500">No maintenance requests found.</p>}
-                     </div>
-                </div>
-            </div>
-        );
-    };
-
     const renderContent = () => {
         switch (activeTab) {
             case 'overview': return renderOverview();
             case 'verification': return renderVerification();
             case 'viewings': return renderViewings();
-            case 'saved': return renderSavedProperties();
-            case 'myRentals': return renderMyRentals();
-            case 'bills': return renderUtilityBills();
-            case 'rent': return renderRentPayments();
-            case 'pastRentals': return renderPastRentals();
+            case 'applications': return renderApplicationsAndRentals();
+            case 'bills': return renderBillsAndPayments();
             case 'maintenance': return renderMaintenance();
+            case 'saved': return renderSavedProperties();
             default: return renderOverview();
         }
     };
-    
-    const sidebarOptions = [
-        {id: "overview", label: "Overview", icon: <Icons.Squares2X2Icon className="w-5 h-5"/>, count: undefined},
-        {id: "myRentals", label: "Applications & Tenancy", icon: <Icons.DocumentTextIcon className="w-5 h-5"/>, count: pendingAgreementSignatures},
-        {id: "rent", label: "Rent Payments", icon: <Icons.BanknotesIcon className="w-5 h-5"/>, count: rentBillableItems.filter(i => i.status !== 'Paid').length},
-        {id: "bills", label: "Utility Bills", icon: <Icons.BoltIcon className="w-5 h-5"/>, count: bills.filter(b => !b.isPaid).length},
-        {id: "maintenance", label: "Maintenance", icon: <Icons.ClipboardDocumentListIcon className="w-5 h-5"/>, count: maintenanceRequests.filter(t => t.status !== MaintenanceStatus.DONE).length},
-        {id: "viewings", label: "My Viewings", icon: <Icons.CalendarDaysIcon className="w-5 h-5"/>, count: undefined},
-        {id: "saved", label: "Saved Properties", icon: <Icons.HeartIcon className="w-5 h-5"/>, count: undefined},
-        {id: "pastRentals", label: "Past Rentals", icon: <Icons.ArrowLeftIcon className="w-5 h-5" />, count: undefined},
-        {id: "verification", label: "Verification", icon: <Icons.ShieldCheckIcon className="w-5 h-5"/>, count: undefined},
-    ];
 
-    // Final JSX
+
+    // Main Component return
     return (
         <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row container mx-auto px-4 md:px-8 py-8 gap-8">
             {isCreateRequestModalOpen && <CreateMaintenanceRequestModal onClose={() => setIsCreateRequestModalOpen(false)} onSubmit={onAddMaintenanceRequest} properties={propertiesForMaintenance} users={relevantUsersForMaintenance} currentUser={user} agreements={agreements}/>}
-            {reviewingAgreement && (
-                <LeaveReviewModal
-                    details={reviewingAgreement}
-                    onClose={() => setReviewingAgreement(null)}
-                    onSubmit={handleReviewSubmit}
-                />
-            )}
-            
-            <aside className="hidden md:block md:w-1/4 lg:w-1/5 flex-shrink-0">
+            {reviewingAgreement && <LeaveReviewModal details={reviewingAgreement} onClose={() => setReviewingAgreement(null)} onSubmit={handleReviewSubmit} />}
+             <aside className="hidden md:block md:w-1/4 lg:w-1/5 flex-shrink-0">
                 <div className="bg-white p-4 rounded-lg shadow-md border space-y-2 sticky top-24">
-                    {sidebarOptions.map(opt => <SidebarButton key={opt.id} {...opt} activeTab={activeTab} onTabChange={onTabChange} />)}
+                    <SidebarButton id="overview" label="Overview" icon={<Icons.Squares2X2Icon className="w-5 h-5"/>} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="applications" label="Applications & Rentals" icon={<Icons.DocumentTextIcon className="w-5 h-5"/>} count={pendingAgreementSignatures} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="viewings" label="My Viewings" icon={<Icons.CalendarDaysIcon className="w-5 h-5"/>} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="bills" label="Bills & Payments" icon={<Icons.BanknotesIcon className="w-5 h-5"/>} count={[...rentBillableItems, ...utilityBillItems].filter(i => i.status === 'Unpaid').length} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="saved" label="Saved Properties" icon={<Icons.HeartIcon className="w-5 h-5"/>} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="maintenance" label="Maintenance" icon={<Icons.ClipboardDocumentListIcon className="w-5 h-5"/>} count={maintenanceRequests.filter(t => t.status !== MaintenanceStatus.DONE).length} activeTab={activeTab} onTabChange={onTabChange} />
+                    <SidebarButton id="verification" label="Verification (KYC)" icon={<Icons.ShieldCheckIcon className="w-5 h-5"/>} activeTab={activeTab} onTabChange={onTabChange} />
+                    <div className="pt-2 mt-2 border-t">
+                         <button
+                            onClick={onSmartSearchClick}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-all text-white bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 shadow-md hover:shadow-lg"
+                        >
+                            <Icons.SparklesIcon className="w-5 h-5"/>
+                            <span className="flex-grow text-left">Smart Search</span>
+                        </button>
+                    </div>
                 </div>
             </aside>
-            <main className="flex-grow min-w-0 overflow-y-auto custom-scrollbar">
-                <div className="md:hidden mb-4">
+
+             <main className="flex-grow min-w-0 overflow-y-auto custom-scrollbar">
+                <div className="md:hidden mb-4 space-y-2">
                     <label htmlFor="dashboard-nav" className="sr-only">Select a section</label>
                     <select id="dashboard-nav" value={activeTab} onChange={(e) => onTabChange(e.target.value)} className="w-full p-3 border rounded-lg shadow-sm text-lg font-semibold">
-                       {sidebarOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                       <option value="overview">Overview</option>
+                       <option value="applications">Applications & Rentals</option>
+                       <option value="viewings">My Viewings</option>
+                       <option value="bills">Bills & Payments</option>
+                       <option value="saved">Saved Properties</option>
+                       <option value="maintenance">Maintenance</option>
+                       <option value="verification">Verification (KYC)</option>
                     </select>
+                    <button
+                        onClick={onSmartSearchClick}
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-all text-white bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 shadow-md"
+                    >
+                        <Icons.SparklesIcon className="w-5 h-5"/>
+                        <span>Smart Search</span>
+                    </button>
                 </div>
                 {renderContent()}
             </main>

@@ -325,7 +325,7 @@ const PropertyList: React.FC<PropertyListProps> = ({ properties, users, onSelect
           const priceIcon = L.divIcon({
               html: `<div class="bg-primary text-white font-bold text-sm px-2 py-1 rounded-full shadow-lg flex items-center justify-center">${formatRent(property.rent)}</div>`,
               className: '', // important to clear default styling to avoid conflicts
-              iconSize: L.point(65, 24),
+              iconSize: [65, 24],
               iconAnchor: [32, 12]
           });
           

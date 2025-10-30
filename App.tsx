@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, MaintenanceRequest, Review, PlatformSettings } from './types';
+import type { Property, Application, Payment, User, Viewing, Agreement, Verification, Bill, Dispute, ActivityLog, Notification, AiFilters, MaintenanceRequest, Review, PlatformSettings, PoliceVerificationFormData } from './types';
 import { UserRole, ApplicationStatus, FurnishingStatus, Facing, ViewingStatus, VerificationStatus, BillType, DisputeStatus, ActivityType, NotificationType, PaymentType, MaintenanceStatus, MaintenanceCategory } from './types';
 import { mockProperties, mockUsers, mockViewings, mockAgreements, mockVerifications, mockBills, mockDisputes, mockPayments, mockApplications, mockActivityLogs, mockMaintenanceRequests, mockReviews } from './mockData';
 import Header from './components/Header';
@@ -846,6 +846,58 @@ const App: React.FC = () => {
         setAgreements(prev => prev.map(a => a.id === agreementId ? { ...a, reviewLeft: true } : a));
     };
 
+    const handleUpdateVerification = (updatedVerification: Verification) => {
+        setVerifications(prev => prev.map(v => v.tenantId === updatedVerification.tenantId ? updatedVerification : v));
+    };
+
+    const handleUpdatePropertyAvailability = (propertyId: string, availability: 'available' | 'rented') => {
+      setProperties(prev => prev.map(p => 
+          p.id === propertyId ? { ...p, availability } : p
+      ));
+    };
+
+    const handleConfirmDepositPayment = (applicationId: string) => {
+        const application = applications.find(a => a.id === applicationId);
+        if (!application) return;
+
+        const originalAppId = applicationId.replace('deposit-', '');
+
+        setApplications(prev => prev.map(a => {
+            if (a.id === applicationId || a.id === originalAppId) {
+                return { ...a, status: ApplicationStatus.MOVE_IN_READY };
+            }
+            return a;
+        }));
+
+        const property = properties.find(p => p.id === application.propertyId);
+        if (property) {
+            addNotification(
+                application.renterId,
+                NotificationType.KEYS_HANDOVER_READY,
+                `Your payment for "${property.title}" has been confirmed! The property is ready for key handover.`,
+                property.id
+            );
+        }
+    };
+
+    const handleConfirmKeyHandover = (applicationId: string) => {
+        const application = applications.find(a => a.id === applicationId);
+        if (!application) return;
+
+        const originalAppId = applicationId.replace('deposit-', '');
+
+        setApplications(prev => prev.map(a => {
+            if (a.id === applicationId || a.id === originalAppId) {
+                return { ...a, status: ApplicationStatus.COMPLETED };
+            }
+            return a;
+        }));
+
+        handleUpdatePropertyAvailability(application.propertyId, 'rented');
+        
+        setRecentlyPaidApplicationId(originalAppId);
+    };
+
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -867,8 +919,8 @@ const App: React.FC = () => {
         {currentView === 'browsing' && <PropertyList properties={properties} users={users} onSelectProperty={handleSelectProperty} initialSearchTerm={initialSearchTerm} cityName={cityName} aiFilters={aiFilters} onAiFiltersApplied={() => setAiFilters(null)} currentUser={currentUser} savedProperties={savedProperties} onToggleSaveProperty={handleToggleSaveProperty} />}
         {currentView === 'propertyDetails' && selectedProperty && <PropertyDetails properties={properties} users={users} reviews={reviews} property={selectedProperty} owner={users.find(u => u.id === selectedProperty.ownerId)} onBack={handleGoBackToList} onScheduleViewing={handleScheduleViewingRequest} onBookNow={handleDirectBookingRequest} onNavigateToHome={resetToHome} onNavigateToBrowsing={() => setCurrentView('browsing')} currentUser={currentUser} savedProperties={savedProperties} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} />}
         {currentView === 'booking' && selectedProperty && currentUser && <ApplicationForm property={selectedProperty} currentUser={currentUser} onSubmit={handleApplicationSubmit} onBack={() => setCurrentView('propertyDetails')} bookingType={bookingType}/>}
-        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.OWNER && <OwnerDashboard user={currentUser} properties={properties.filter(p => p.ownerId === currentUser.id)} viewings={viewings.filter(v => v.ownerId === currentUser.id).map(v => ({ viewing: v, tenant: users.find(u => u.id === v.tenantId)!, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => properties.some(p => p.id === a.propertyId && p.ownerId === currentUser.id)).map(app => ({ application: app, renter: users.find(u => u.id === app.renterId)!, property: properties.find(p => p.id === app.propertyId)! }))} agreements={agreements.filter(a => a.ownerId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} paymentHistory={payments.filter(p => properties.some(prop => prop.id === p.propertyId && prop.ownerId === currentUser.id)).map(p => ({ payment: p, tenantName: users.find(u => u.id === p.userId)?.name || 'Unknown', propertyTitle: properties.find(prop => prop.id === p.propertyId)?.title || 'N/A' }))} maintenanceRequests={maintenanceRequests.filter(req => properties.some(p => p.id === req.propertyId && p.ownerId === currentUser.id))} users={users} bills={bills.filter(b => properties.some(p => p.id === b.propertyId && p.ownerId === currentUser.id))} verifications={verifications} activeTab={dashboardView} onTabChange={setDashboardView} onUpdateViewingStatus={handleUpdateViewingStatus} onUpdateApplicationStatus={handleUpdateApplicationStatus} onEditProperty={handleEditProperty} onPostPropertyClick={() => { setIsPostingProperty(true); setCurrentView('postProperty'); }} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onPayPlatformFee={() => {}} onAcknowledgeOfflinePayment={() => {}} onMarkAsRented={() => {}} onInitiateFinalizeAgreement={handleInitiateFinalizeAgreement} onConfirmDepositPayment={()=>{}} onConfirmKeyHandover={()=>{}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onGenerateBill={()=>{}} onUpdateKycStatus={()=>{}} />}
-        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.RENTER && <RenterDashboard user={currentUser} agreements={agreements.filter(a => a.tenantId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} viewings={viewings.filter(v => v.tenantId === currentUser.id).map(v => ({ viewing: v, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => a.renterId === currentUser.id).map(a => ({ application: a, property: properties.find(p => p.id === a.propertyId)!}))} payments={payments.filter(p => p.userId === currentUser.id)} properties={properties} bills={bills.filter(b => b.tenantId === currentUser.id)} verification={verifications.find(v => v.tenantId === currentUser.id) || { id: '', tenantId: currentUser.id, status: VerificationStatus.NOT_SUBMITTED, formData: {}, submittedAt: '' }} maintenanceRequests={maintenanceRequests.filter(req => agreements.some(a => a.tenantId === currentUser.id && a.propertyId === req.propertyId))} users={users} savedProperties={properties.filter(p => savedProperties.includes(p.id))} activeTab={dashboardView} onTabChange={setDashboardView} onSubmitVerification={() => {}} onPayBill={(billId) => { const bill = bills.find(b => b.id === billId); if (bill) handlePayBill(bill); }} onRaiseDispute={() => {}} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onInitiatePaymentFlow={handleInitiatePaymentFlow} onConfirmRent={() => {}} onCancelViewing={() => {}} onTenantReject={() => {}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} onBrowseClick={() => setCurrentView('browsing')} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={() => setRecentlyPaidApplicationId(null)} onLeaveReview={handleLeaveReview} />}
+        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.OWNER && <OwnerDashboard user={currentUser} properties={properties.filter(p => p.ownerId === currentUser.id)} viewings={viewings.filter(v => v.ownerId === currentUser.id).map(v => ({ viewing: v, tenant: users.find(u => u.id === v.tenantId)!, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => properties.some(p => p.id === a.propertyId && p.ownerId === currentUser.id)).map(app => ({ application: app, renter: users.find(u => u.id === app.renterId)!, property: properties.find(p => p.id === app.propertyId)! }))} agreements={agreements.filter(a => a.ownerId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} paymentHistory={payments.filter(p => properties.some(prop => prop.id === p.propertyId && prop.ownerId === currentUser.id)).map(p => ({ payment: p, tenantName: users.find(u => u.id === p.userId)?.name || 'Unknown', propertyTitle: properties.find(prop => prop.id === p.propertyId)?.title || 'N/A' }))} maintenanceRequests={maintenanceRequests.filter(req => properties.some(p => p.id === req.propertyId && p.ownerId === currentUser.id))} users={users} bills={bills.filter(b => properties.some(p => p.id === b.propertyId && p.ownerId === currentUser.id))} verifications={verifications} activeTab={dashboardView} onTabChange={setDashboardView} onUpdateViewingStatus={handleUpdateViewingStatus} onUpdateApplicationStatus={handleUpdateApplicationStatus} onEditProperty={handleEditProperty} onPostPropertyClick={() => { setIsPostingProperty(true); setCurrentView('postProperty'); }} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onPayPlatformFee={() => {}} onAcknowledgeOfflinePayment={() => {}} onMarkAsRented={(propertyId) => handleUpdatePropertyAvailability(propertyId, 'rented')} onMarkAsAvailable={(propertyId) => handleUpdatePropertyAvailability(propertyId, 'available')} onInitiateFinalizeAgreement={handleInitiateFinalizeAgreement} onConfirmDepositPayment={handleConfirmDepositPayment} onConfirmKeyHandover={handleConfirmKeyHandover} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onGenerateBill={()=>{}} onUpdateKycStatus={()=>{}} />}
+        {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.RENTER && <RenterDashboard user={currentUser} agreements={agreements.filter(a => a.tenantId === currentUser.id).map(a => ({ agreement: a, property: properties.find(p => p.id === a.propertyId)! }))} viewings={viewings.filter(v => v.tenantId === currentUser.id).map(v => ({ viewing: v, property: properties.find(p => p.id === v.propertyId)! }))} applications={applications.filter(a => a.renterId === currentUser.id).map(a => ({ application: a, property: properties.find(p => p.id === a.propertyId)!}))} payments={payments.filter(p => p.userId === currentUser.id)} properties={properties} bills={bills.filter(b => b.tenantId === currentUser.id)} verification={verifications.find(v => v.tenantId === currentUser.id) || { id: '', tenantId: currentUser.id, status: VerificationStatus.NOT_SUBMITTED, formData: {}, submittedAt: '' }} maintenanceRequests={maintenanceRequests.filter(req => agreements.some(a => a.tenantId === currentUser.id && a.propertyId === req.propertyId))} users={users} savedProperties={properties.filter(p => savedProperties.includes(p.id))} activeTab={dashboardView} onTabChange={setDashboardView} onUpdateVerification={handleUpdateVerification} onPayBill={(billId) => { const bill = bills.find(b => b.id === billId); if (bill) handlePayBill(bill); }} onRaiseDispute={() => {}} onViewAgreementDetails={(agreement, property) => setViewingAgreementDetails({ agreement, property })} onSignAgreement={handleSignAgreement} onInitiatePaymentFlow={handleInitiatePaymentFlow} onConfirmRent={() => {}} onCancelViewing={() => {}} onTenantReject={() => {}} onAddMaintenanceRequest={handleAddMaintenanceRequest} onUpdateMaintenanceStatus={handleUpdateMaintenanceStatus} onAddMaintenanceComment={handleAddMaintenanceComment} onToggleSaveProperty={handleToggleSaveProperty} onSelectProperty={handleSelectProperty} onBrowseClick={() => setCurrentView('browsing')} recentlyPaidApplicationId={recentlyPaidApplicationId} onClearRecentlyPaid={() => setRecentlyPaidApplicationId(null)} onLeaveReview={handleLeaveReview} onSmartSearchClick={() => setIsSmartSearchOpen(true)} />}
         {currentView === 'dashboard' && currentUser && currentUser.role === UserRole.SUPER_ADMIN && <SuperAdminDashboard properties={properties} applications={applications} users={users} disputes={disputes} activityLogs={activityLogs} payments={payments} viewings={viewings} onUpdateKycStatus={() => {}} onUpdateViewingStatus={()=>{}} onRefundViewingAdvance={()=>{}} currentUser={currentUser} onUpdateUserRole={()=>{}} platformSettings={platformSettings} onUpdateSettings={handleUpdateSettings} />}
         {currentView === 'editProperty' && editingProperty && <EditPropertyForm property={editingProperty} onSubmit={handleUpdateProperty} onCancel={() => { setEditingProperty(null); setCurrentView('dashboard'); }} onNavigateToHome={resetToHome} onNavigateToDashboard={() => setCurrentView('dashboard')} />}
         {currentView === 'postProperty' && isPostingProperty && <PostPropertyForm onSubmit={handlePostNewProperty} onCancel={() => { setIsPostingProperty(false); setCurrentView('dashboard'); }} platformSettings={platformSettings} />}

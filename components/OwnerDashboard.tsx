@@ -31,6 +31,7 @@ interface OwnerDashboardProps {
   onPayPlatformFee: (applicationId: string) => void;
   onAcknowledgeOfflinePayment: (applicationId: string) => void;
   onMarkAsRented: (propertyId: string) => void;
+  onMarkAsAvailable: (propertyId: string) => void;
   onInitiateFinalizeAgreement: (application: Application, property: Property) => void;
   onConfirmDepositPayment: (applicationId: string) => void;
   onConfirmKeyHandover: (applicationId: string) => void;
@@ -78,9 +79,10 @@ interface PropertiesTabContentProps {
     onPostPropertyClick: () => void;
     onEditProperty: (property: Property) => void;
     onMarkAsRented: (propertyId: string) => void;
+    onMarkAsAvailable: (propertyId: string) => void;
 }
 
-const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties, propertiesWithTenants, onPostPropertyClick, onEditProperty, onMarkAsRented }) => {
+const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties, propertiesWithTenants, onPostPropertyClick, onEditProperty, onMarkAsRented, onMarkAsAvailable }) => {
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
     return (
@@ -126,18 +128,31 @@ const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties,
                                 <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row justify-between items-start gap-4">
                                     <div>
                                         <h4 className="text-sm font-semibold">Current Tenant</h4>
-                                        {propertiesWithTenants.find(pwt => pwt.property.id === property.id)?.tenant ? (
-                                            <div className="flex items-center gap-3 mt-2">
-                                                <img src={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.profilePictureUrl} alt={propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name} className="w-10 h-10 rounded-full" />
-                                                <div>
-                                                    <p className="font-medium">{propertiesWithTenants.find(pwt => pwt.property.id === property.id)!.tenant!.name}</p>
-                                                </div>
-                                            </div>
-                                        ) : <p className="text-sm text-neutral-500 mt-2">Currently available for rent.</p>}
+                                        {(() => {
+                                            const pwt = propertiesWithTenants.find(pwt => pwt.property.id === property.id);
+                                            if (pwt?.tenant) {
+                                                return (
+                                                    <div className="flex items-center gap-3 mt-2">
+                                                        <img src={pwt.tenant.profilePictureUrl} alt={pwt.tenant.name} className="w-10 h-10 rounded-full" />
+                                                        <div>
+                                                            <p className="font-medium">{pwt.tenant.name}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (property.availability === 'rented') {
+                                                return <p className="text-sm text-neutral-500 mt-2">Rented (managed offline).</p>;
+                                            } else {
+                                                return <p className="text-sm text-neutral-500 mt-2">Currently available for rent.</p>;
+                                            }
+                                        })()}
                                     </div>
                                     <div className="flex items-center gap-2 self-start sm:self-end w-full sm:w-auto">
                                         <button onClick={() => onEditProperty(property)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/10 rounded-md">Edit</button>
-                                        {property.availability === 'available' && <button onClick={() => onMarkAsRented(property.id)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold bg-secondary text-white hover:bg-primary rounded-md">Mark as Rented</button>}
+                                        {property.availability === 'available' ? (
+                                            <button onClick={() => onMarkAsRented(property.id)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold bg-secondary text-white hover:bg-primary rounded-md">Mark as Rented</button>
+                                        ) : (
+                                            <button onClick={() => onMarkAsAvailable(property.id)} className="flex-1 sm:flex-initial px-3 py-1.5 text-sm font-semibold bg-green-600 text-white hover:bg-green-700 rounded-md">Mark as Available</button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -168,7 +183,11 @@ const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties,
                                             <td className="px-4 py-3 text-sm">{tenant?.name || 'N/A'}</td>
                                             <td className="px-4 py-3 text-sm space-x-2 whitespace-nowrap">
                                                 <button onClick={() => onEditProperty(property)} className="font-semibold text-primary hover:underline">Edit</button>
-                                                {property.availability === 'available' && <button onClick={() => onMarkAsRented(property.id)} className="font-semibold text-secondary hover:underline">Mark Rented</button>}
+                                                {property.availability === 'available' ? (
+                                                    <button onClick={() => onMarkAsRented(property.id)} className="font-semibold text-secondary hover:underline">Mark Rented</button>
+                                                ) : (
+                                                    <button onClick={() => onMarkAsAvailable(property.id)} className="font-semibold text-green-600 hover:underline">Mark Available</button>
+                                                )}
                                             </td>
                                         </tr>
                                     )
@@ -184,7 +203,7 @@ const PropertiesTabContent: React.FC<PropertiesTabContentProps> = ({ properties,
 
 // Main Component
 const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
-    const { user, properties, viewings, applications, agreements, paymentHistory, maintenanceRequests, users, bills, verifications, activeTab, onTabChange, onUpdateKycStatus, ...handlers } = props;
+    const { user, properties, viewings, applications, agreements, paymentHistory, maintenanceRequests, users, bills, verifications, activeTab, onTabChange, onUpdateKycStatus, onMarkAsAvailable, ...handlers } = props;
 
     // ... State and Memos ...
     const [isCreateRequestModalOpen, setIsCreateRequestModalOpen] = useState(false);
@@ -214,11 +233,19 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
     }, [verifications, myTenantIds]);
 
     const propertiesWithTenants = useMemo(() => {
+        const today = new Date();
         return properties.map(p => {
-            const activeAgreement = agreements.find(a => a.property.id === p.id && a.agreement.signedByOwner && a.agreement.signedByTenant);
+            const activeAgreement = agreements.find(a =>
+                a.property.id === p.id &&
+                a.agreement.signedByOwner &&
+                a.agreement.signedByTenant &&
+                new Date(a.agreement.startDate) <= today &&
+                new Date(a.agreement.endDate) >= today
+            );
+            
             const tenant = activeAgreement ? users.find(u => u.id === activeAgreement.agreement.tenantId) : null;
             return { property: p, tenant, agreement: activeAgreement?.agreement };
-        }).filter(item => item.tenant && item.agreement);
+        });
     }, [properties, agreements, users]);
 
     const pendingVerificationsCount = myVerifications.filter(v => v.status === VerificationStatus.PENDING).length;
@@ -805,7 +832,7 @@ const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
         switch (activeTab) {
             case 'overview': return renderOverview();
             case 'actions': return renderActions();
-            case 'properties': return <PropertiesTabContent properties={properties} propertiesWithTenants={propertiesWithTenants} onPostPropertyClick={handlers.onPostPropertyClick} onEditProperty={handlers.onEditProperty} onMarkAsRented={handlers.onMarkAsRented} />;
+            case 'properties': return <PropertiesTabContent properties={properties} propertiesWithTenants={propertiesWithTenants} onPostPropertyClick={handlers.onPostPropertyClick} onEditProperty={handlers.onEditProperty} onMarkAsRented={handlers.onMarkAsRented} onMarkAsAvailable={onMarkAsAvailable} />;
             case 'onboarding': return renderOnboarding();
             case 'activeRentals': return renderActiveRentals();
             case 'bills': return renderBills();
